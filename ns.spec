@@ -14,6 +14,7 @@ Source1:	http://www.isi.edu/nsnam/ns/doc/ns_doc.pdf
 # Source1-md5:	66e82f100292ebe0bda8bcb98fa26bba
 URL:		http://www.isi.edu/nsnam/
 Patch0:		%{name}-install.patch
+Patch1:		tcl-lib.patch
 BuildRequires:	autoconf
 BuildRequires:	otcl-devel
 BuildRequires:	tclcl-static
@@ -88,6 +89,7 @@ Pliki tcl dla NS.
 %prep
 %setup -q
 %patch0 -p1
+%patch1 -p1
 
 %build
 cp -f /usr/share/automake/config.sub .
