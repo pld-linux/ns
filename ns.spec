@@ -133,7 +133,7 @@ rm -rf $RPM_BUILD_ROOT
 %exclude %{_bindir}/*.tcl
 %attr(755,root,root) %{_bindir}/*
 %dir %{_datadir}/ns
-%{_mandir}/man1
+%{_mandir}/man1/*
 
 %files cmu-scen
 %defattr(644,root,root,755)
