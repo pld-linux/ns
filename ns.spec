@@ -16,6 +16,7 @@ URL:		http://www.isi.edu/nsnam/
 Patch0:		%{name}-install.patch
 Patch1:		tcl-lib.patch
 BuildRequires:	autoconf
+BuildRequires:	automake
 BuildRequires:	otcl-devel
 BuildRequires:	tclcl-static
 BuildRequires:	tcl-devel >= 8.4
@@ -38,7 +39,7 @@ satelitarnych) sieciach.
 Summary:	CBR connections generator for NS
 Summary(pl):	Generator po³±czeñ CBR dla NS
 Group:		Applications/Networking
-Requires:	%{name} = %{version}
+Requires:	%{name} = %{version}-%{release}
 
 %description cmu-scen
 CBR connections generator for NS.
@@ -50,7 +51,7 @@ Generator po³±czeñ CBR dla NS.
 Summary:	Empirical FTP/Web traffic model for NS
 Summary(pl):	Empiryczny model ruchowy FTP/Web dla NS
 Group:		Applications/Networking
-Requires:	%{name} = %{version}
+Requires:	%{name} = %{version}-%{release}
 
 %description empweb
 Empirical FTP/Web traffic model that simulates FTP/Web traffic based
@@ -66,7 +67,7 @@ podstawie danych CDF (dystrybuanty) wyci±gniêtych z prawdziwego
 Summary:	TCP emulation for NS
 Summary(pl):	Emulacja TCP dla NS
 Group:		Applications/Networking
-Requires:	%{name} = %{version}
+Requires:	%{name} = %{version}-%{release}
 
 %description emulate
 TCP emulation for NS.
@@ -78,7 +79,7 @@ Emulacja TCP dla NS.
 Summary:	Tcl files for NS
 Summary(pl):	Pliki tcl dla NS
 Group:		Applications/Networking
-Requires:	%{name} = %{version}
+Requires:	%{name} = %{version}-%{release}
 
 %description tcl
 Tcl files for NS.
