@@ -17,8 +17,8 @@ Patch0:		%{name}-install.patch
 BuildRequires:	autoconf
 BuildRequires:	otcl-devel
 BuildRequires:	tclcl-static
-BuildRequires:	tcl-devel
-BuildRequires:	tk-devel
+BuildRequires:	tcl-devel >= 8.4
+BuildRequires:	tk-devel >= 8.4
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
