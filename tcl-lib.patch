@@ -1,0 +1,157 @@
+diff -ur otcl-1.8.orig/conf/configure.in.dmalloc otcl-1.8/conf/configure.in.dmalloc
+--- otcl-1.8.orig/conf/configure.in.dmalloc	2003-02-10 23:44:14.000000000 +0100
++++ otcl-1.8/conf/configure.in.dmalloc	2004-08-18 21:36:17.251553992 +0200
+@@ -10,11 +10,12 @@
+ 	/usr/contrib/lib \
+ 	/usr/local/lib \
+ 	/usr/lib \
++	/usr/lib64 \
+ 	/usr/contrib/include \
+ 	/usr/local/include \
+ 	/usr/include \
+ 	"
+-DMALLOC_PATH_D="$d $d/lib $d/include"
++DMALLOC_PATH_D="$d $d/lib $d/lib64 $d/include"
+ 
+ if test "x$d" = xUNDEF; then
+ 	AC_MSG_CHECKING(dmalloc)
+diff -ur otcl-1.8.orig/conf/configure.in.otcl otcl-1.8/conf/configure.in.otcl
+--- otcl-1.8.orig/conf/configure.in.otcl	2003-02-10 23:44:14.000000000 +0100
++++ otcl-1.8/conf/configure.in.otcl	2004-08-18 21:33:52.126616336 +0200
+@@ -20,15 +20,18 @@
+ 		/usr/include"
+ OTCL_LIB_PLACES_D="$d \
+ 		$d/lib \
++		$d/lib64 \
+ 		"
+ OTCL_LIB_PLACES="../otcl \
+ 		../otcl-$OTCL_VERS \
+ 		../otcl-$OTCL_ALT_VERS \
+ 		$prefix/lib \
++		$prefix/lib64 \
+ 		$x_libraries \
+ 		/usr/contrib/lib \
+ 		/usr/local/lib \
+ 		/usr/lib \
++		/usr/lib64 \
+ 		/usr/src/local/otcl \
+ 		/usr/src/local/otcl-$OTCL_VERS \
+ 		/usr/src/local/otcl-$OTCL_ALT_VERS \
+diff -ur otcl-1.8.orig/conf/configure.in.tcl otcl-1.8/conf/configure.in.tcl
+--- otcl-1.8.orig/conf/configure.in.tcl	2003-02-10 23:44:15.000000000 +0100
++++ otcl-1.8/conf/configure.in.tcl	2004-08-18 21:33:28.283241080 +0200
+@@ -130,6 +130,7 @@
+ dnl /usr/include/tcl is for Debian Linux
+ TCL_LIB_PLACES_D="$d \
+ 		$d/lib \
++		$d/lib64 \
+ 		$d/unix"
+ TCL_LIB_PLACES=" \
+ 		../lib \
+@@ -156,9 +157,11 @@
+ 		/usr/lib/tcl$TCL_OLD_ALT_VERS \
+                 /usr/local/lib \
+                 $prefix/lib \
++                $prefix/lib64 \
+                 $x_libs/tk \
+                 $x_libs \
+                 /usr/lib \
++                /usr/lib64 \
+ 		"
+ 
+ dnl Decide which set of .tcl library files to use
+diff -ur otcl-1.8.orig/conf/configure.in.Tcl otcl-1.8/conf/configure.in.Tcl
+--- otcl-1.8.orig/conf/configure.in.Tcl	2003-02-10 23:44:13.000000000 +0100
++++ otcl-1.8/conf/configure.in.Tcl	2004-08-18 21:34:28.140141448 +0200
+@@ -28,7 +28,8 @@
+ 
+ 	AC_MSG_CHECKING(for libTcl)
+         places="$d \
+-                $d/lib"  
++                $d/lib \
++                $d/lib64"  
+ 	V_LIB_BTCL=FAIL
+ 	for dir in $places; do
+ 		if test -r $dir/libTcl.so -o -r $dir/libTcl.a ; then
+@@ -89,10 +90,11 @@
+                 ../$LIBTCL_OLD_VERSION \
+                 ../$LIBTCL_VERSION \
+                 $prefix/lib \
++                $prefix/lib64 \
+                 $x_libraries \
+                 /usr/contrib/lib \
+                 /usr/local/lib \
+-                /usr/lib \
++                /usr/lib64 \
+                 /usr/src/local/Tcl \
+                 /usr/src/local/$LIBTCL_OLD_VERSION \
+                 /usr/src/local/$LIBTCL_VERSION \
+diff -ur otcl-1.8.orig/conf/configure.in.TclCL otcl-1.8/conf/configure.in.TclCL
+--- otcl-1.8.orig/conf/configure.in.TclCL	2003-02-10 23:44:13.000000000 +0100
++++ otcl-1.8/conf/configure.in.TclCL	2004-08-18 21:34:51.590576440 +0200
+@@ -39,10 +39,12 @@
+                 /usr/contrib/lib \
+                 /usr/local/lib \
+                 /usr/lib \
++                /usr/lib64 \
+                 /usr/src/local/Tcl \
+                 /usr/src/local/Tcl-1.0"
+ TCLCL_LIB_PLACES_D="$d \
+-        $d/lib"  
++        $d/lib \
++        $d/lib64"  
+ TCLCL_PROG_PLACES="\
+ 		../tclcl-$TCLCL_VERS \
+ 		../tclcl-$TCLCL_ALT_VERS \
+diff -ur otcl-1.8.orig/conf/configure.in.tcldebug otcl-1.8/conf/configure.in.tcldebug
+--- otcl-1.8.orig/conf/configure.in.tcldebug	2003-02-10 23:44:15.000000000 +0100
++++ otcl-1.8/conf/configure.in.tcldebug	2004-08-18 21:40:20.977502016 +0200
+@@ -19,11 +19,13 @@
+ 		/usr/contrib/lib \
+ 		/usr/local/lib \
+ 		/usr/lib \
++		/usr/lib64 \
+ 		/usr/src/local/tcl-debug \
+ 		$local_vers \
+ 		"
+ TCLDEBUG_PATH_D="$d \
+ 		$d/lib \
++		$d/lib64 \
+ 		$d/../lib \
+ 		"
+ 
+diff -ur otcl-1.8.orig/conf/configure.in.tk otcl-1.8/conf/configure.in.tk
+--- otcl-1.8.orig/conf/configure.in.tk	2003-02-10 23:44:15.000000000 +0100
++++ otcl-1.8/conf/configure.in.tk	2004-08-18 21:33:28.284240928 +0200
+@@ -118,6 +118,7 @@
+ dnl /usr/include/tcl for debian/linux
+ TK_LIB_PLACES_D="$d \ 
+                 $d/lib \
++                $d/lib64 \
+ 		$d/unix"
+ TK_LIB_PLACES=" \
+ 		../lib \
+@@ -142,9 +143,11 @@
+                 /usr/local/lib/tk$TK_OLD_ALT_VERS \
+                 /usr/local/lib \
+                 $prefix/lib \
++                $prefix/lib64 \
+                 $x_libs/tk \
+                 $x_libs \
+-                /usr/lib"
++                /usr/lib \
++                /usr/lib64"
+ 
+ NS_BEGIN_PACKAGE(tk)
+ NS_CHECK_HEADER_PATH(tk.h,$TK_H_PLACES,$d,$TK_H_PLACES_D,V_INCLUDE_TK,tk)
+diff -ur otcl-1.8.orig/conf/configure.in.x11 otcl-1.8/conf/configure.in.x11
+--- otcl-1.8.orig/conf/configure.in.x11	2003-02-10 23:44:15.000000000 +0100
++++ otcl-1.8/conf/configure.in.x11	2004-08-18 21:33:28.285240776 +0200
+@@ -4,6 +4,7 @@
+ xlibdirs="\
+ 	/usr/openwin/lib \
+ 	/usr/X11R6/lib \
++	/usr/X11R6/lib64 \
+ 	/usr/lib/X11R6 \
+ 	/usr/X11R5/lib \
+ 	/usr/lib/X11R5 \
