@@ -77,7 +77,7 @@ Emulacja TCP dla NS.
 
 %package tcl
 Summary:	Tcl files for NS
-Summary(pl):	Pliki tcl dla NS
+Summary(pl):	Pliki Tcl dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
@@ -85,7 +85,7 @@ Requires:	%{name} = %{version}-%{release}
 Tcl files for NS.
 
 %description tcl -l pl
-Pliki tcl dla NS.
+Pliki Tcl dla NS.
 
 %prep
 %setup -q
