@@ -136,14 +136,17 @@ rm -rf $RPM_BUILD_ROOT
 %{_mandir}/man1
 
 %files cmu-scen
+%defattr(644,root,root,755)
 %doc indep-utils/cmu-scen-gen/README
 %{_datadir}/ns/cmu-scen-gen
 
 %files empweb
+%defattr(644,root,root,755)
 %attr(755,root,root) %{_bindir}/*.awk
 %attr(755,root,root) %{_bindir}/*.tcl
 
 %files emulate
+%defattr(644,root,root,755)
 %doc emulate/README.notes
 %{_datadir}/ns/emulate
 
