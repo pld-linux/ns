@@ -98,6 +98,7 @@ Pliki tcl dla NS.
 	CCOPT="%{rpmcflags}" \
 	CXXFLAGS="%{rpmcflags}"
 perl -pe 's|/usr/local/bin/|/usr/bin/|' -i tcl/ex/tcp-fs/{process.awk,run.tcl}
+perl -pe 's|/usr/sww/bin/|/usr/bin/|' -i tcl/ex/tcp-fs/run-fs-asym.tcl
 
 %install
 rm -rf $RPM_BUILD_ROOT
