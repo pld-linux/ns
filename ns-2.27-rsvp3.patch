@@ -1,0 +1,5265 @@
+diff -urN ns-2.27/FILES ns-2.27-rsvp/FILES
+--- ns-2.27/FILES	Tue Jan 13 02:59:20 2004
++++ ns-2.27-rsvp/FILES	Wed Sep 29 09:38:52 2004
+@@ -1020,6 +1020,16 @@
+ routing/rtmodule.h
+ routing/rttable.cc
+ routing/rttable.h
++rsvp/rsvp.cc
++rsvp/rsvp.h
++rsvp/rsvp-link.cc
++rsvp/rsvp-link.h
++rsvp/rsvp-messages.cc
++rsvp/rsvp-messages.h
++rsvp/rsvp-objects.cc
++rsvp/rsvp-objects.h
++rsvp/wfq.cc
++rsvp/wfq.h
+ rtproto/rtproto.h
+ satellite/satgeometry.cc
+ satellite/satgeometry.h
+@@ -1302,6 +1312,10 @@
+ tcl/ex/rng-test.tcl
+ tcl/ex/rng-test2.tcl
+ tcl/ex/route-gen.tcl
++tcl/ex/rsvp/rsvp_conf.tcl
++tcl/ex/rsvp/rsvp_distinct.tcl
++tcl/ex/rsvp/rsvp_large.tcl
++tcl/ex/rsvp/rsvp_merge.tcl
+ tcl/ex/sample.trace
+ tcl/ex/sat-aloha.tcl
+ tcl/ex/sat-iridium-links.tcl
+@@ -1459,6 +1473,7 @@
+ tcl/lib/ns-queue.tcl
+ tcl/lib/ns-random.tcl
+ tcl/lib/ns-route.tcl
++tcl/lib/ns-rsvp.tcl
+ tcl/lib/ns-rtmodule.tcl
+ tcl/lib/ns-sat.tcl
+ tcl/lib/ns-source.tcl
+diff -urN ns-2.27/Makefile.in ns-2.27-rsvp/Makefile.in
+--- ns-2.27/Makefile.in	Tue Jan 13 02:59:20 2004
++++ ns-2.27-rsvp/Makefile.in	Wed Sep 29 09:38:52 2004
+@@ -277,6 +277,8 @@
+ 	diffserv/dsred.o diffserv/dsredq.o \
+ 	diffserv/dsEdge.o diffserv/dsCore.o \
+ 	diffserv/dsPolicy.o diffserv/ew.o diffserv/dewp.o \
++	rsvp/wfq.o rsvp/rsvp.o rsvp/rsvp-objects.o\
++	rsvp/rsvp-messages.o rsvp/rsvp-link.o\
+ 	queue/red-pd.o queue/pi.o queue/vq.o queue/rem.o \
+ 	queue/gk.o \
+ 	pushback/rate-limit.o pushback/rate-limit-strategy.o \
+@@ -400,6 +402,7 @@
+ 	tcl/lib/ns-address.tcl \
+ 	tcl/lib/ns-intserv.tcl \
+ 	tcl/lib/ns-autoconf.tcl \
++	tcl/lib/ns-rsvp.tcl \
+ 	tcl/rtp/session-rtp.tcl \
+ 	tcl/lib/ns-mip.tcl \
+ 	tcl/rtglib/dynamics.tcl \
+diff -urN ns-2.27/common/packet.h ns-2.27-rsvp/common/packet.h
+--- ns-2.27/common/packet.h	Tue Jan 13 02:57:44 2004
++++ ns-2.27-rsvp/common/packet.h	Wed Sep 29 09:38:52 2004
+@@ -160,6 +160,15 @@
+ 	// SMAC packet
+ 	PT_SMAC,
+ 
++	// RSVP packets
++	PT_RSVP,
++	PT_RSVP_PATH,
++	PT_RSVP_RESV,
++	PT_PATH_TEAR,
++	PT_RESV_TEAR,
++	PT_RESV_ERR,
++	PT_RESV_CONF,
++
+ 	// insert new packet types here
+ 	PT_NTYPE // This MUST be the LAST one
+ };
+@@ -250,6 +259,15 @@
+ 		// smac
+ 		name_[PT_SMAC]="smac";
+ 
++		// RSVP packets
++		name_[PT_RSVP]="RSVP";
++		name_[PT_RSVP_PATH]="Path";
++		name_[PT_RSVP_RESV]="Resv";
++		name_[PT_PATH_TEAR]="PathTear";
++		name_[PT_RESV_TEAR]="ResvTear";
++		name_[PT_RESV_ERR]="ResvErr";
++		name_[PT_RESV_CONF]="ResvConf";
++
+ 		name_[PT_NTYPE]= "undefined";
+ 	}
+ 	const char* name(packet_t p) const { 
+diff -urN ns-2.27/makefile.vc ns-2.27-rsvp/makefile.vc
+--- ns-2.27/makefile.vc	Tue Jan 13 02:59:18 2004
++++ ns-2.27-rsvp/makefile.vc	Wed Sep 29 09:38:52 2004
+@@ -247,6 +247,8 @@
+ 	diffserv/dsred.o diffserv/dsredq.o \
+ 	diffserv/dsEdge.o diffserv/dsCore.o \
+ 	diffserv/dsPolicy.o diffserv/ew.o\
++	rsvp/wfq.o rsvp/rsvp.o rsvp/rsvp-objects.o\
++	rsvp/rsvp-messages.o rsvp/rsvp-link.o\
+ 	queue/red-pd.o queue/pi.o queue/vq.o queue/rem.o \
+ 	queue/gk.o \
+ 	pushback/rate-limit.o pushback/rate-limit-strategy.o \
+@@ -357,6 +359,7 @@
+ 	tcl/lib/ns-namsupp.tcl \
+ 	tcl/lib/ns-address.tcl \
+ 	tcl/lib/ns-intserv.tcl \
++	tcl/lib/ns-rsvp.tcl \
+ 	tcl/rtp/session-rtp.tcl \
+ 	tcl/lib/ns-mip.tcl \
+ 	tcl/rtglib/dynamics.tcl \
+diff -urN ns-2.27/rsvp/rsvp-link.cc ns-2.27-rsvp/rsvp/rsvp-link.cc
+--- ns-2.27/rsvp/rsvp-link.cc	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp-link.cc	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,83 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++#include "rsvp-link.h"
++
++
++static class RSVPLinkClass : public TclClass {
++public:
++  RSVPLinkClass() : TclClass("RSVPLink") {}
++  TclObject* create(int, const char*const*) {
++    return (new RSVPLink());
++  }
++} class_RSVPLink;
++
++
++static class RSVPCheckerClass : public TclClass {
++public:
++  RSVPCheckerClass() : TclClass("RSVPChecker") {}
++  TclObject* create(int, const char*const*) {
++    return (new RSVPChecker());
++  }
++} class_RSVPChecker;
++
++
++RSVPChecker::RSVPChecker() {
++  //bind("off_ip_", &off_ip_);
++  //bind("off_rsvp_", &off_rsvp_);
++  bind("src_", &src_);
++}
++
++
++RSVPLink::RSVPLink() {
++  bind_bw("besteffort_", &besteffort_);
++}
++
++
++/* The 'give' function allows the RSVP agent to hand a packet back
++   to the link after it was processed. That way, RSVP agents don't have
++   to worry about routing (especially multicast routing). */
++void RSVPChecker::give(Packet *p) {
++  /* Simply forward the packet as if there was no RSVP agent */
++  target_->recv(p);
++}
++
++
++void RSVPChecker::recv(Packet* p, Handler* h) {
++  //hdr_cmn *hdr = (hdr_cmn*)p->access(off_cmn_);
++  hdr_cmn *hdr = hdr_cmn::access(p);
++  if ((hdr->ptype() >= PT_RSVP) && (hdr->ptype() <= PT_RESV_CONF)) {
++    Tcl& tcl = Tcl::instance();
++    tcl.evalf("%s get-rsvp-agent", name());
++    if (strlen(tcl.result()) == 0) {
++      target_->recv(p);
++    } else {
++      //hdr_rsvp *rsvphdr = (hdr_rsvp*)p->access(off_rsvp_);
++      hdr_rsvp *rsvphdr = hdr_rsvp::access(p) ;
++      rsvphdr->fromhop = src_;
++      ((RSVPAgent *)TclObject::lookup(tcl.result()))->give(p, this);
++    }
++  } else {
++    target_->recv(p);
++  }
++}
++
+diff -urN ns-2.27/rsvp/rsvp-link.h ns-2.27-rsvp/rsvp/rsvp-link.h
+--- ns-2.27/rsvp/rsvp-link.h	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp-link.h	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,62 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++ 
++#include "connector.h"
++#include "adc.h"
++#include "salink.h"
++#include "rsvp.h"
++
++
++#ifndef ns_rsvp_link_h
++#define ns_rsvp_link_h
++
++/* RSVPLink can be seen as the 'outgoing interface' from a node to
++   a link. On RSVPLink, admission control is performed, and reservations
++   are set up. */
++class RSVPLink : public SALink {
++ public:
++  RSVPLink();
++  /*  void recv(Packet* p, Handler* h);*/
++ protected:
++  double besteffort_;  /* Remaining bandwidth for best effort traffic */
++};
++
++
++/* RSVPChecker is the 'incoming interface' to a node from a link.
++   RSVPChecker listens for RSVP packets and forwards them to the
++   RSVP agent (if there is one) on the target node. Note: RSVPChecker
++   is installed *after* the delay element on the link (actually after
++   the TTLChecker!), RSVPLink *before* it (that is the whole reason 
++   why RSVPChecker and RSVPLink can not be one object but have to be 
++   split up) */
++class RSVPChecker : public Connector {
++ public:
++  RSVPChecker();
++  void give(Packet *p);
++  void recv(Packet* p, Handler* h);
++ protected:
++  //int off_ip_;
++  //int off_rsvp_;
++  nsaddr_t src_;
++};
++
++#endif
+diff -urN ns-2.27/rsvp/rsvp-messages.cc ns-2.27-rsvp/rsvp/rsvp-messages.cc
+--- ns-2.27/rsvp/rsvp-messages.cc	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp-messages.cc	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,173 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++#include "rsvp-messages.h"
++
++
++RSVPmessage::RSVPmessage(char ty, char ttl) {
++  header.type = ty;
++  header.send_TTL = ttl;
++  header.length = 8;
++  header.conlength = sizeof(struct common_header);
++  objects = NULL;
++  tail = NULL;
++  con = 0;
++}
++
++
++RSVPmessage::RSVPmessage(unsigned char *cont) {
++  RSVPobject *n;
++  struct objheader *head;
++  struct common_header *comhead;
++  comhead = (struct common_header *)cont;
++  memcpy(&header, comhead, sizeof(struct common_header));
++  unsigned char *search = cont + sizeof(struct common_header);
++  objects = NULL;
++  tail = NULL;
++  con = 0;
++  while (search < cont + header.conlength) {
++    head = (struct objheader*)search;
++    switch (head->classnum) {
++      case 1: n = new SESSION(search); break;
++      case 3: n = new RSVP_HOP(search); break;
++      case 5: n = new TIME_VALUES(search); break;
++      case 6: n = new ERROR_SPEC(search); break;
++      case 8: n = new STYLE(search); break;
++      case 9: n = new FLOWSPEC(search); break;
++      case 10: n = new FILTER_SPEC(search); break;
++      case 11: n = new SENDER_TEMPLATE(search); break;
++      case 12: n = new SENDER_TSPEC(search); break;
++      case 15: n = new RESV_CONFIRM(search); break;
++    }
++    search = search + n->get_conlength();
++    if (tail == NULL) {
++      objects = n;
++      tail = objects;
++    } else {
++      tail->next = n;
++      tail = n;
++    }
++  }
++}
++
++
++/* get_first returns the first RSVPobject in the object list with
++   the Class-Num 'classnum'.
++   */
++RSVPobject *RSVPmessage::get_first(char classnum) {
++  RSVPobject *search;
++  search = objects;
++  while ((search != NULL) && (search->get_classnum() != classnum)) {
++    search = search->next;
++  }
++  return search;
++}
++
++
++/* delete_first deletes the first RSVPobject in the object list with
++   the Class-Num 'classnum'.
++   */
++void RSVPmessage::delete_first(char classnum) {
++  RSVPobject *temp, *search;
++  if (objects != NULL) {
++    if (objects->get_classnum() == classnum) {
++      temp = objects;
++      objects = objects->next;
++      header.conlength -= temp->get_conlength();
++      header.length -= temp->get_length();
++      delete temp;
++    } else {
++      search = objects;
++      while ((search->next != NULL) && 
++	     (search->next->get_classnum() != classnum)) {
++	search = search->next;
++      }
++      if (search->next != NULL) {
++	temp = search->next;
++	search->next = search->next->next;
++	header.conlength -= temp->get_conlength();
++	header.length -= temp->get_length();
++	delete temp;
++      }
++    }
++  }
++}
++
++
++/* delete_objects() deletes all objects from the object list
++ */
++void RSVPmessage::delete_objects() {
++  RSVPobject *temp;
++  while (objects != NULL) {
++    temp = objects;
++    objects = objects->next;
++    delete temp;
++  }
++  header.conlength = sizeof(struct common_header);
++  header.length = 8;
++}
++
++
++/* Adds an RSVP object to the end of the message's object list
++ */
++void RSVPmessage::add_object(RSVPobject *obj) {
++  if (objects == NULL) {
++    objects = obj;
++  } else {
++    tail->next = obj;
++  }
++  tail = obj;
++  header.conlength += obj->get_conlength();
++  header.length += obj->get_length();
++}
++
++
++unsigned char *RSVPmessage::get_contents() {
++  if (con) {
++    delete[] contents;
++  }
++  contents = new unsigned char[header.conlength];
++  struct common_header *comhead = (struct common_header *)contents;
++  memcpy(comhead, &header, sizeof(struct common_header));
++  unsigned char *pos = contents + sizeof(struct common_header);
++  RSVPobject *search = objects;
++  while (search != NULL) {
++    memcpy(pos, search->get_contents(), search->get_conlength());
++    pos = pos + search->get_conlength();
++    search = search->next;
++  }
++  con = 1;
++  return contents;
++}
++
++
++/* Dump the RSVP message (possible debug output) */
++void RSVPmessage::dump_message() {
++  printf("RSVPmessage:  Type: %d  send_TTL: %d  length: %d  conlength: %d\n",
++	 header.type, header.send_TTL, header.length, header.conlength);
++  RSVPobject *search;
++  search = objects;
++  while (search != NULL) {
++    search->dump_object();
++    search = search->next;
++  }
++}
+diff -urN ns-2.27/rsvp/rsvp-messages.h ns-2.27-rsvp/rsvp/rsvp-messages.h
+--- ns-2.27/rsvp/rsvp-messages.h	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp-messages.h	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,84 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++
++#ifndef ns_rsvp_messages_h
++#define ns_rsvp_messages_h
++
++#include "rsvp-objects.h"
++#include "stdio.h"
++
++
++#define PATH     1
++#define RESV     2
++#define PATHERR  3
++#define RESVERR  4
++#define PATHTEAR 5
++#define RESVTEAR 6
++#define RESVCONF 7
++
++
++/* The common header for all RSVP messages */
++struct common_header {
++  char type;       // The message type
++  char send_TTL;   // The IP TTL with which the message was sent
++  int length;      // The "simulated" length of the message
++  int conlength;   // The "real" length of the message
++};
++
++
++/* RSVPmessage is the only class for all RSVP messages. That seems to be
++   better than having one single class for each RSVP message (Path,
++   Resv, etc.). There are two constructors: One which is used to
++   construct a new RSVP message and receives the type and ttl as
++   arguments, and one which is used to reconstruct the single objects 
++   from an RSVP message that was received from another node. The only 
++   argument for the latter is a pointer to a buffer which contains the 
++   contents of the message. The class copies the buffer into its local
++   buffer.
++   */
++class RSVPmessage {
++ public:
++  RSVPmessage(char ty, char ttl);
++  RSVPmessage(unsigned char *cont);
++  ~RSVPmessage() { if (con) delete[] contents; delete_objects(); };
++  unsigned char *get_contents();
++  inline int get_type() { return header.type; };
++  inline int get_length() { return header.length; };
++  inline int get_conlength() { return header.conlength; };
++  inline int get_ttl() { return header.send_TTL; };
++  inline void set_ttl(char ttl) { header.send_TTL = ttl; };
++  RSVPobject *get_first(char classnum);
++  void delete_first(char classnum);
++  void add_object(RSVPobject *obj);
++  void dump_message();
++private:    
++  void delete_objects();
++  int con;
++  unsigned char *contents;  /* A pointer to the contents */
++  RSVPobject *objects;      /* The head of the linked list with the objects */
++  RSVPobject *tail;         /* The tail of the object list */
++  struct common_header header; /* The common header for the message */
++};
++   
++
++#endif
+diff -urN ns-2.27/rsvp/rsvp-objects.cc ns-2.27-rsvp/rsvp/rsvp-objects.cc
+--- ns-2.27/rsvp/rsvp-objects.cc	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp-objects.cc	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,361 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++#include "rsvp-objects.h"
++
++#include <stdio.h>
++
++
++void RSVPobject::dump_object() {
++  printf("  RSVPobject:  Class-Num: %d  C-Type: %d  Conlength: %d  Length: %d\n",
++	 header->classnum, header->ctype, header->conlength, header->length);
++}
++
++
++SESSION::SESSION(nsaddr_t dst, char fl, int f, char ip6) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  if (!ip6) {
++    header->ctype = 1;
++    header->length = 12;
++  } else {
++    header->ctype = 2;
++    header->length = 24;
++  }
++  con->fid = f;
++  con->dest = dst;
++  header->classnum = 1;
++  header->conlength = cl;
++}
++
++
++SESSION::SESSION(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void SESSION::dump_object() {
++  RSVPobject::dump_object();
++  printf("    SESSION:  dest: %d  fid: %d\n", con->dest, con->fid);
++}
++
++
++RSVP_HOP::RSVP_HOP(nsaddr_t h, char ip6) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  if (!ip6) {
++    header->ctype = 1;
++    header->length = 12;
++  } else {
++    header->ctype = 2;
++    header->length = 24;
++  }
++  con->hop = h;
++  header->classnum = 3;
++  header->conlength = cl;
++}
++
++
++RSVP_HOP::RSVP_HOP(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void RSVP_HOP::dump_object() {
++  RSVPobject::dump_object();
++  printf("    RSVP_HOP:  hop: %d\n", con->hop);
++}
++
++
++TIME_VALUES::TIME_VALUES(double refresh) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  header->ctype = 1;
++  header->length = 8;
++  con->r = refresh;
++  header->classnum = 5;
++  header->conlength = cl;
++}
++
++
++TIME_VALUES::TIME_VALUES(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void TIME_VALUES::dump_object() {
++  RSVPobject::dump_object();
++  printf("    TIME_VALUES:  r: %f\n", con->r);
++}
++
++
++ERROR_SPEC::ERROR_SPEC(nsaddr_t node, char fl, char code, int value, char ip6) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  if (ip6) {
++    header->ctype = 2;
++    header->length = 24;
++  } else {
++    header->ctype = 1;
++    header->length = 12;
++  }
++  con->errnode = node;
++  con->flags = fl;
++  con->errcode = code;
++  con->errvalue = value;
++  header->classnum = 6;
++  header->conlength = cl;
++}
++
++
++ERROR_SPEC::ERROR_SPEC(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void ERROR_SPEC::dump_object() {
++  RSVPobject::dump_object();
++  printf("    ERROR_SPEC:  node: %d  flags: %d  code: %d  value: %d\n", 
++	 con->errnode, con->flags, con->errcode, con->errvalue);
++}
++
++
++STYLE::STYLE(long st) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  header->ctype = 1;
++  header->length = 8;
++  con->style = st;
++  header->classnum = 8;
++  header->conlength = cl;
++}
++
++
++STYLE::STYLE(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void STYLE::dump_object() {
++  RSVPobject::dump_object();
++  printf("    STYLE:  style: %ld\n", con->style);
++}
++
++
++FLOWSPEC::FLOWSPEC(double r, long s) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  header->ctype = 2;
++  header->length = 36;
++  con->rate = r;
++  con->size = s;
++  header->classnum = 9;
++  header->conlength = cl;
++}
++
++
++FLOWSPEC::FLOWSPEC(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void FLOWSPEC::dump_object() {
++  RSVPobject::dump_object();
++  printf("    FLOWSPEC:  rate: %3.3f  size: %ld\n", 
++	 con->rate, con->size);
++}
++
++
++FILTER_SPEC::FILTER_SPEC(nsaddr_t src, char ip6) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  if (ip6) {
++    header->ctype = 3;
++    header->length = 24;
++  } else {
++    header->ctype = 1;
++    header->length = 12;
++  }
++  con->addr = src;
++  header->classnum = 10;
++  header->conlength = cl;
++}
++
++
++FILTER_SPEC::FILTER_SPEC(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void FILTER_SPEC::dump_object() {
++  RSVPobject::dump_object();
++  printf("    FILTER_SPEC :  addr: %ld\n", con->addr);
++}
++
++
++SENDER_TEMPLATE::SENDER_TEMPLATE(nsaddr_t src, char ip6) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  if (ip6) {
++    header->ctype = 3;
++    header->length = 24;
++  } else {
++    header->ctype = 1;
++    header->length = 12;
++  }
++  con->addr = src;
++  header->classnum = 11;
++  header->conlength = cl;
++}
++
++
++SENDER_TEMPLATE::SENDER_TEMPLATE(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void SENDER_TEMPLATE::dump_object() {
++  RSVPobject::dump_object();
++  printf("    SENDER_TEMPLATE:  addr: %ld\n", con->addr);
++}
++
++
++SENDER_TSPEC::SENDER_TSPEC(double r, long s) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  header->ctype = 2;
++  header->length = 36;
++  con->rate = r;
++  con->size = s;
++  header->classnum = 12;
++  header->conlength = cl;
++}
++
++
++SENDER_TSPEC::SENDER_TSPEC(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void SENDER_TSPEC::dump_object() {
++  RSVPobject::dump_object();
++  printf("    SENDER_TSPEC:  rate: %3.3f  size: %ld\n", 
++	 con->rate, con->size);
++}
++
++
++RESV_CONFIRM::RESV_CONFIRM(nsaddr_t a, char ip6) {
++  int cl;
++  cl = sizeof(struct objheader) + sizeof(struct construct); 
++  contents = new unsigned char[cl];
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++  if (ip6) {
++    header->ctype = 2;
++    header->length = 20;
++  } else {
++    header->ctype = 1;
++    header->length = 8;
++  }
++  con->addr = a;
++  header->classnum = 15;
++  header->conlength = cl;
++}
++
++
++RESV_CONFIRM::RESV_CONFIRM(unsigned char *cont) {
++  header = (objheader *)cont;
++  contents = new unsigned char[header->conlength];
++  memcpy(contents, cont, header->conlength);
++  header = (objheader *)contents;
++  con = (construct *)(contents + sizeof(struct objheader));
++}
++
++
++void RESV_CONFIRM::dump_object() {
++  RSVPobject::dump_object();
++  printf("    RESV_CONFIRM:  addr: %ld\n", con->addr);
++}
++
+diff -urN ns-2.27/rsvp/rsvp-objects.h ns-2.27-rsvp/rsvp/rsvp-objects.h
+--- ns-2.27/rsvp/rsvp-objects.h	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp-objects.h	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,259 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++ 
++#ifndef ns_rsvp_objects_h
++#define ns_rsvp_objects_h
++
++#include "config.h"
++
++/* The following RSVP objects are currently defined in this implementation:
++   1 - SESSION
++   3 - RSVP_HOP
++   5 - TIME_VALUES
++   6 - ERROR_SPEC
++   8 - STYLE
++   9 - FLOWSPEC
++   10 - FILTER_SPEC
++   11 - SENDER_TEMPLATE
++   12 - SENDER_TSPEC
++   15 - RESV_CONFIRM
++   */
++
++const int STYLE_FF = 10;
++const int STYLE_SE = 18;
++const int STYLE_WF = 17;
++
++
++/* The common header for all RSVP objects */
++struct objheader {
++  int length;     // The "simulated" length of the object
++  int conlength;  // The "real" length of the object contents
++  int classnum;   // The Class-Num as defined in RFC 2205
++  int ctype;      // The C-Type as defined in RFC 2205
++};
++
++/* RSVPobject is the base class for all  RSVP objects.
++   All objects that are derived from this base class will usually have
++   at least two constructors: One which is used to construct a new
++   RSVP object and receives the necessary values as arguments, and
++   one which is used to reconstruct an RSVP object from an RSVP message
++   that was received. The only argument for the latter is a pointer to
++   a buffer which contains the contents of the object. The objects
++   copy the buffer into their local buffer.
++   */
++class RSVPobject {
++public:
++  RSVPobject() : next(0) {};
++  virtual ~RSVPobject() { delete[] contents; };
++  inline int get_length() { return header->length; };
++  inline void set_length(int len) { header->length = len; };
++  inline int get_conlength() { return header->conlength; };
++  inline char get_classnum() { return header->classnum; };
++  inline char get_ctype() { return header->ctype; };
++  inline unsigned char *get_contents() { return contents; };
++  virtual void dump_object();
++  RSVPobject *next;
++protected:
++  struct objheader *header;
++  unsigned char *contents;  // A pointer to the contents
++};
++
++
++/* There is no Protocol Id field in the SESSION class and the
++   'fl' (flags) argument to the constructor is ignored.
++   */
++class SESSION : public RSVPobject {
++public:
++  SESSION(nsaddr_t dst, char fl, int f, char ip6);
++  SESSION(unsigned char *cont);
++  virtual ~SESSION() {};
++  inline nsaddr_t get_dest() { return con->dest; };
++  inline int get_fid() { return con->fid; };
++  void dump_object();
++private:
++  struct construct {
++    nsaddr_t dest;
++    int fid;
++  };
++  struct construct *con;
++};
++
++
++/* There is no logical interface handle in RSVP_HOP objects. In fact,
++   making sure that resv messages are routed through the correct
++   interfaces on all nodes is a problem if they pass through non-RSVP
++   clouds.
++   */
++class RSVP_HOP : public RSVPobject {
++public:
++  RSVP_HOP(nsaddr_t h, char ip6);
++  RSVP_HOP(unsigned char *cont);
++  virtual ~RSVP_HOP() {};
++  inline nsaddr_t get_hop() { return con->hop; };
++  void dump_object();
++private:
++  struct construct {
++    nsaddr_t hop;
++  };
++  struct construct *con;
++};
++
++
++class TIME_VALUES : public RSVPobject {
++public:
++  TIME_VALUES(double refresh);
++  TIME_VALUES(unsigned char *cont);
++  virtual ~TIME_VALUES() {};
++  inline double get_r() { return con->r; };
++  void dump_object();
++private:
++  struct construct {
++    double r;
++  };
++  struct construct *con;
++};
++
++
++class ERROR_SPEC : public RSVPobject {
++public:
++  ERROR_SPEC(nsaddr_t node, char fl, char code, int value, char ip6);
++  ERROR_SPEC(unsigned char *cont);
++  virtual ~ERROR_SPEC() {};
++  inline nsaddr_t get_errnode() { return con->errnode; };
++  inline char get_flags() { return con->flags; };
++  inline char get_errcode() { return con->errcode; };
++  inline int get_errvalue() { return con->errvalue; };
++  void dump_object();
++private:
++  struct construct {
++    nsaddr_t errnode;
++    char flags;
++    char errcode;
++    int errvalue;
++  };
++  struct construct *con;
++};
++
++
++class STYLE : public RSVPobject {
++public:
++  STYLE(long st);
++  STYLE(unsigned char *cont);
++  virtual ~STYLE() {};
++  inline long get_style() { return con->style; };
++  void dump_object();
++private:
++  struct construct {
++    long style;
++  };
++  struct construct *con;
++};
++
++
++/* At the moment, only FLOWSPEC objects for controlled-load service
++   (RFC 2211) are supported. There is no peak rate minimum policed unit 
++   and maximum packet size.
++   */
++class FLOWSPEC : public RSVPobject {
++public:
++  FLOWSPEC(double r, long s);
++  FLOWSPEC(unsigned char *cont);
++  virtual ~FLOWSPEC() {};
++  inline double get_rate() { return con->rate; };
++  inline long get_size() { return con->size; };
++  void dump_object();
++private:
++  struct construct {
++    double rate;
++    long size;
++  };
++  struct construct *con;
++};
++
++
++/* Flows are only distinguished by their flow id (fid) which is
++   defined for each flow in the SESSION class, hence one of
++   the two FILTER_SPEC objects for IPv6 is obsolete. The C-Type for
++   FILTER_SPECs is either 1 or 3 in this implementation.
++   */
++class FILTER_SPEC : public RSVPobject {
++public:
++  FILTER_SPEC(nsaddr_t src, char ip6);
++  FILTER_SPEC(unsigned char *cont);
++  virtual ~FILTER_SPEC() {};
++  inline long get_addr() { return con->addr; };
++  void dump_object();
++private:
++  struct construct {
++    long addr;
++  };
++  struct construct *con;
++};
++
++
++class SENDER_TEMPLATE : public RSVPobject {
++public:
++  SENDER_TEMPLATE(nsaddr_t src, char ip6);
++  SENDER_TEMPLATE(unsigned char *cont);
++  virtual ~SENDER_TEMPLATE() {};
++  inline long get_addr() { return con->addr; };
++  void dump_object();
++private:
++  struct construct {
++    long addr;
++  };
++  struct construct *con;
++};
++
++
++class SENDER_TSPEC : public RSVPobject {
++public:
++  SENDER_TSPEC(double r, long s);
++  SENDER_TSPEC(unsigned char *cont);
++  virtual ~SENDER_TSPEC() {};
++  inline double get_rate() { return con->rate; };
++  inline long get_size() { return con->size; };
++  void dump_object();
++private:
++  struct construct {
++    double rate;
++    long size;
++  };
++  struct construct *con;
++};
++
++
++class RESV_CONFIRM : public RSVPobject {
++public:
++  RESV_CONFIRM(nsaddr_t a, char ip6);
++  RESV_CONFIRM(unsigned char *cont);
++  virtual ~RESV_CONFIRM() {};
++  inline long get_addr() { return con->addr; };
++  void dump_object();
++private:
++  struct construct {
++    long addr;
++  };
++  struct construct *con;
++};
++
++#endif
+diff -urN ns-2.27/rsvp/rsvp.cc ns-2.27-rsvp/rsvp/rsvp.cc
+--- ns-2.27/rsvp/rsvp.cc	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp.cc	Wed Sep 29 09:40:40 2004
+@@ -0,0 +1,1990 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++
++#include "rsvp.h"
++#include "rsvp-objects.h"
++#include "rsvp-messages.h"
++#include "rng.h"
++
++int hdr_rsvp::offset_ ;
++
++static class RSVPHeaderClass : public PacketHeaderClass {
++public:
++  RSVPHeaderClass() : PacketHeaderClass("PacketHeader/RSVP", 
++					sizeof(hdr_rsvp)) {
++    bind_offset (&hdr_rsvp::offset_);
++  }
++  
++} class_RSVPhdr;
++
++
++static class RSVPClass : public TclClass {
++public:
++  RSVPClass() : TclClass("Agent/RSVP") {}
++  TclObject* create(int, const char*const*) {
++    return (new RSVPAgent());
++  }
++} class_RSVP;
++
++
++RSVPAgent::RSVPAgent() : Agent(PT_RSVP), noisy_(0), next_sid_(0), 
++  ip6_(0), s_list_(0), t_list_(0) {
++  //bind("off_rsvp_", &off_rsvp_);
++  bind("noisy_", &noisy_);
++  bind("refresh_", &refresh_);
++  bind("lifetime_factor_", &lifetime_factor_);
++  bind("ip6_", &ip6_);
++  bind("num_flows_", &num_flows_);
++  bind("num_rsb_", &num_rsb_);
++  bind("num_psb_", &num_psb_);
++  bind_bool("nam_", &nam_);
++  /* At the moment, drand48 is used as random generator. This should
++     be changed at some point to use the ns random generators. */
++  //srand48(gethrtime());
++  // changed to use the default rng - Sean Murphy 4/12/99
++}
++
++
++/* Check if any path states have timed out and should be removed. This
++   function returns a '1' if the session was removed in the process
++   (because no state blocks were left), otherwise it returns 0. */
++char RSVPAgent::check_path(session *s) {
++  psb *temp, *search;
++  double now = Scheduler::instance().clock();
++  while ((s->psb_list != NULL) && 
++	 (s->psb_list->phop->get_hop() != -1) &&
++	 (now > s->psb_list->timeout)) {
++    temp = s->psb_list;
++    s->psb_list = s->psb_list->next;
++    send_path_tear_message(s, temp);
++    if ((noisy_ & UPC_PATHTO) && (temp->timeout != -1)) {
++      Tcl& tcl = Tcl::instance();
++      tcl.evalf("%s upcall-path-timeout %d %d", name(),  s->sid, 
++		temp->sender->get_addr());
++    }
++    delete_rsbs(s, temp);  /* (see below) */
++    clear_psb(temp);
++    delete temp;
++    num_psb_--;
++  }
++  if (s->psb_list != NULL) {
++    search = s->psb_list;
++    while (search->next != NULL) {
++      if ((search->next->phop->get_hop() != -1) &&
++	  (search->next->timeout < now)) {
++	temp = search->next;
++	search->next = temp->next;
++	if ((noisy_ & UPC_PATHTO) && (temp->timeout != -1)) {
++	  Tcl& tcl = Tcl::instance();
++	  tcl.evalf("%s upcall-path-timeout %d %d", name(),  s->sid, 
++		    temp->sender->get_addr());
++	}
++	send_path_tear_message(s, temp);
++	/* Find all RSBs for this PSB and tear them down and update traffic
++	   control accordingly. Important note: No ResvTear messages will 
++	   be sent as a result of this. RFC 2205 states that ResvTear 
++	   messages should be sent by end systems or as a result of 
++	   *reservation* timeouts. However, here we are dealing with 
++	   a *path* timeout. RFC 2209 does not mention anything
++	   about this, and the ISI RSVP demon does not seem to send
++	   any ResvTear messages either when a path state expires. */
++	delete_rsbs(s, temp);
++	clear_psb(temp);
++	delete temp;
++	num_psb_--;
++      } else {
++	search = search->next;
++      }
++    }
++  }
++  if (s->psb_list == NULL) {
++    s->path_ref = -1;
++  }
++  if ((s->resv_ref == -1) && (s->path_ref == -1)) {
++    remove_session(s);
++    return 1;
++  }
++  return 0;
++}
++
++
++/* Check if any resv states have timed out and should be removed. This
++   function returns 1 if the session was removed in the process, otherwise
++   it returns 0. */
++char RSVPAgent::check_resv(session *s) {
++  rsb *temp, *search, *r_list;
++  // Tcl& tcl = Tcl::instance(); - unused
++  double now = Scheduler::instance().clock();
++  r_list = 0;
++  while ((s->rsb_list != NULL) && 
++	 (s->rsb_list->nhop->get_hop() != -1) &&
++	 (s->rsb_list->timeout < now)) {
++    temp = s->rsb_list;
++    s->rsb_list = s->rsb_list->next;
++    update_traffic_control(s, temp);
++    if ((noisy_ & UPC_RESVTO) && (temp->timeout != -1) && 
++	(temp->nhop->get_hop() != -1)) {
++      Tcl& tcl = Tcl::instance();
++      tcl.evalf("%s upcall-resv-timeout %d %d", name(),  s->sid, 
++		temp->sender->get_addr());
++    }
++    temp->next = r_list;
++    r_list = temp;
++    num_rsb_--;
++  }
++  if (s->rsb_list != NULL) {
++    search = s->rsb_list;
++    while (search->next != NULL) {
++      if ((search->next->nhop->get_hop() != -1) &&
++	  (search->next->timeout < now)) {
++	temp = search->next;
++	search->next = temp->next;
++	clear_rsb(temp);
++	update_traffic_control(s, temp);
++	if ((noisy_ & UPC_RESVTO) && (temp->timeout != -1) && 
++	    (temp->nhop->get_hop() != -1)) {
++	  Tcl& tcl = Tcl::instance();
++	  tcl.evalf("%s upcall-resv-timeout %d %d", name(),  s->sid, 
++		    temp->sender->get_addr());
++	}
++	temp->next = r_list;
++	r_list = temp;
++	num_rsb_--;
++      } else {
++	search = search->next;
++      }
++    }
++  }
++  send_resv_tear_messages(s, r_list);
++  refresh_resv(s, 0);
++  while (r_list != NULL) {
++    temp = r_list;
++    r_list = r_list->next;
++    clear_rsb(temp);
++    delete temp;
++  }
++  if (s->rsb_list == NULL) {
++    s->resv_ref = -1;
++  }
++  if ((s->resv_ref == -1) && (s->path_ref == -1)) {
++    remove_session(s);
++    return 1;
++  }
++  return 0;
++}
++
++
++/* Make sure that all sub-objects of a PSB are deleted */
++void RSVPAgent::clear_psb(psb *p) {
++  delete p->sender;
++  delete p->s_tspec;
++  delete p->phop;
++}
++
++
++/* Make sure that all sub-objects of an RSB are deleted */
++void RSVPAgent::clear_rsb(rsb *r) {
++  delete r->nhop;
++  delete r->fspec;
++  delete r->sender;
++  delete r->st;
++  r->p = NULL;
++}
++
++
++int RSVPAgent::command(int argc, const char*const* argv) {
++  Tcl& tcl = Tcl::instance();
++  /* session dest fid */
++  if (strcmp(argv[1], "session") == 0) {
++    if (argc != 4) {
++      return (TCL_ERROR);
++    }
++    if (argv[2][0] == '_') {
++      tcl.evalf("%s id", argv[2]);
++      tcl.resultf("%d", new_session_sid(atoi(tcl.result()), atoi(argv[3]), 1));
++    } else {
++      tcl.resultf("%d", new_session_sid(strtol(argv[2], NULL, 0), 
++					atoi(argv[3]), 1));
++    }
++    return (TCL_OK);
++  }
++  /* confirm session-id */
++  if (strcmp(argv[1], "confirm") == 0) {
++    if (argc != 3) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s == NULL) {
++      tcl.resultf("%s RSVP: unknown session ID %s", name(), argv[2]);
++      return(TCL_ERROR);
++    }
++    s->confirm = 1;
++    return (TCL_OK);
++  }
++  /* sender session-id rate bucket-size ttl */
++  if (strcmp(argv[1], "sender") == 0) {
++    if (argc != 6) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s == NULL) {
++      tcl.resultf("%s RSVP: unknown session ID %s", name(), argv[2]);
++      return(TCL_ERROR);
++    }
++    psb *p;
++    // if ((p = find_psb(s, addr_ >> Address::instance().NodeShift_[1])) 
++    if ((p = find_psb(s, here_.addr_ )) // SM
++	== NULL) { 
++      new_psb(s, atof(argv[3]), atoi(argv[4]), atoi(argv[5]), 
++	      // addr_ >> Address::instance().NodeShift_[1], -1,
++	      here_.addr_ , -1, // SM
++	      refresh_, 0, NULL);
++      num_psb_++;
++    } else {
++      update_psb(s, p, atof(argv[3]), atoi(argv[4]), atoi(argv[5]),
++		 // addr_ >> Address::instance().NodeShift_[1], -1,
++		 here_.addr_ , -1, // SM
++		 refresh_, 0, NULL);
++    }
++    return (TCL_OK);
++  }
++  /* reserve session-id style <flow descriptor list> */
++  if (strcmp(argv[1], "reserve") == 0) {
++    if (argc < 6) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s == NULL) {
++      if (noisy_ & UPC_RESVERR) {
++	tcl.evalf("%s upcall-resv-error %s 4 0 %d", name(), argv[2],
++		  // addr_ >> Address::instance().NodeShift_[1]);
++		  here_.addr_ );
++      }
++    } else {
++      /* Are there any PSBs for this session? */
++      if (s->psb_list == NULL) {
++	if (noisy_ & UPC_RESVERR) {
++	  tcl.evalf("%s upcall-resv-error %s 3 0 %d", name(), argv[2],
++		    // addr_ >> Address::instance().NodeShift_[1]);
++		    here_.addr_ );
++	}
++      } else {
++	if (strcasecmp(argv[3], "ff") != 0) {
++	  if (noisy_ & UPC_RESVERR) {
++	    tcl.evalf("%s upcall-resv-error %s 6 0 %d", name(), argv[2],
++		      // addr_ >> Address::instance().NodeShift_[1]);
++		      here_.addr_ );
++	  }
++	} else {
++	  process_ff_request(s, argc, argv);
++	}
++      }
++    }
++    return (TCL_OK);
++  }
++  /* release session-id */
++  if (strcmp(argv[1], "release") == 0) {
++    if (argc != 3) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s == NULL) {
++      tcl.evalf("puts \"%s RSVP: unknown session ID %s\"", name(), argv[2]);
++    } else {   
++      release_session(s);
++    }
++    return (TCL_OK);
++  }
++  if (strcmp(argv[1], "refresh") == 0) {
++    refresh();
++    return (TCL_OK);
++  }
++  /* sessions */
++  if (strcmp(argv[1], "sessions") == 0) {
++    if (argc != 2) {
++      return (TCL_ERROR);
++    }
++    char buf[200];
++    list_sessions(buf, 200);
++    tcl.resultf("%s", buf);
++    return (TCL_OK);
++  }
++  /* set-status session-id value */
++  if (strcmp(argv[1], "set-status") == 0) {
++    if (argc != 4) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s != NULL) {
++      s->status = atoi(argv[3]);
++    }
++    return (TCL_OK);
++  }
++  /* get-status session-id */
++  if (strcmp(argv[1], "get-status") == 0) {
++    if (argc != 3) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s != NULL) {
++      tcl.resultf("%d", s->status);
++    }
++    return (TCL_OK);
++  }
++  /* set-handle session-id object */
++  if (strcmp(argv[1], "set-handle") == 0) {
++    if (argc != 4) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s != NULL) {
++      strcpy(s->handle, argv[3]);
++    }
++    return (TCL_OK);
++  }
++  /* get-handle session-id */
++  if (strcmp(argv[1], "get-handle") == 0) {
++    if (argc != 3) {
++      return (TCL_ERROR);
++    }
++    session *s = find_session_sid(atoi(argv[2]));
++    if (s != NULL) {
++      tcl.resultf("%s", s->handle);
++    }
++    return (TCL_OK);
++  }
++  return (Agent::command(argc, argv));
++}
++
++
++/* Delete all RSBs for the PSB 'p'. */
++void RSVPAgent::delete_rsbs(session *s, psb *p) {
++  rsb *r, *temp;
++  // Tcl& tcl = Tcl::instance(); - unused
++  while ((s->rsb_list != NULL) && (s->rsb_list->p == p)) {
++    temp = s->rsb_list;
++    s->rsb_list = temp->next;
++    update_traffic_control(s, temp);
++    clear_rsb(temp);
++    delete temp;
++    num_rsb_--;
++  }
++  if (s->rsb_list != NULL) {
++    r = s->rsb_list;
++    while (r->next != NULL) {
++      if (r->next->p == p) {
++	temp = r->next;
++	r->next = temp->next;
++	update_traffic_control(s, temp);
++	clear_rsb(temp);
++	delete temp;
++	num_rsb_--;
++      } else {
++	r = r->next;
++      }
++    }
++  }
++  if (s->rsb_list == NULL) {
++    s->resv_ref = -1;
++  }
++}
++
++
++/* Find a PSB for a session whose SENDER_TEMPLATE matches 'sender'.
++   Return NULL if no such PSB is found. */
++psb *RSVPAgent::find_psb(session *s, nsaddr_t sender) {
++  psb *search = s->psb_list;
++  while ((search != NULL) && (search->sender->get_addr() != sender)) {
++    search = search->next;
++  }
++  return search;
++}
++
++
++/* Find an RSB for a session whose FILTERSPEC matches 'sender' and whose
++   NHOP matches 'nhop'. Return NULL if no such PSB is found. */
++rsb *RSVPAgent::find_rsb(session *s, nsaddr_t sender, nsaddr_t nhop) {
++  rsb *search = s->rsb_list;
++  while ((search != NULL) && ((search->sender->get_addr() != sender) ||
++	 (search->nhop->get_hop() != nhop))) {
++    search = search->next;
++  }
++  return search;
++}
++
++
++/* Return 1 if there is an RSB with the corresponding PSB 'p', otherwise
++   return 0. */
++int RSVPAgent::find_rsb_for_psb(session *s, psb *p) {
++  rsb *r = s->rsb_list;
++  while ((r != NULL) && (r->p != p)) {
++    r = r->next;
++  }
++  return (r != NULL);
++}
++
++
++/* Return a pointer to the session with the destination address 'dst'
++   and the flow id 'fid' or return NULL if none is found. */
++session *RSVPAgent::find_session_dst(nsaddr_t dst, int fid) {
++  session *s = s_list_;
++  while ((s != NULL) && 
++	 ((s->s->get_dest() != dst) || (s->s->get_fid() != fid))) {
++    s = s->next;
++  }
++  if (s == NULL) {
++    return NULL;
++  } else {
++    return s;
++  }
++}
++
++
++/* Return a pointer to the session with the id 'sid' or return NULL if
++   not found. 
++   */
++session *RSVPAgent::find_session_sid(long sid) {
++  session *s = s_list_;
++  while ((s != NULL) && (s->sid > sid)) {
++    s = s->next;
++  }
++  if ((s == NULL) || (s->sid != sid)) {
++    return NULL;
++  } else {
++    return s;
++  }
++}
++
++
++void RSVPAgent::give(Packet *p, RSVPChecker *ret) {
++  //hdr_rsvp* rsvp_hdr = (hdr_rsvp*)p->access(off_rsvp_);
++  hdr_rsvp* rsvp_hdr = hdr_rsvp::access(p);
++  //hdr_cmn* cmn_hdr = (hdr_cmn*)p->access(off_cmn_);
++  hdr_cmn *cmn_hdr = hdr_cmn::access(p);
++  RSVPmessage *msg = new RSVPmessage(p->accessdata());
++  switch (msg->get_type()) {
++    case PATH: process_path_message(msg, cmn_hdr->iface_, ret); break;
++    case PATHTEAR: process_path_tear_message(msg, cmn_hdr->iface_, ret); break;
++    case RESV: process_resv_message(msg, rsvp_hdr->fromhop); break;
++    case RESVTEAR: process_resv_tear_message(msg); break;
++    case RESVERR: process_resv_err_message(msg); break;
++    case RESVCONF: process_resv_conf_message(msg); break;
++  }
++  delete msg;
++  Packet::free(p);
++}
++
++
++/* This function is needed to correct the problem that there seem to
++   be some accuracy problems in C++ so that two doubles are not necessarily
++   equal even if they 'look' equal. The range of 0.00001 seconds should
++   not affect the simulations at all (where the refresh time is chosen
++   randomly from a certain range anyway). */
++char RSVPAgent::in_range(double x, double y) {
++  return (x - 0.00001) <= y;
++}
++
++
++/* Checks for a packet if the current node is a leaf node in a multicast
++   tree. */
++char RSVPAgent::is_leaf(nsaddr_t src, nsaddr_t dst) {
++  Tcl& tcl = Tcl::instance();
++  tcl.evalf("%s is-leaf %d %d", name(), src, dst);
++  return (atoi(tcl.result()));
++}
++
++
++void RSVPAgent::list_sessions(char *buf, int size) {
++  session *s = s_list_;
++  char *ptr;
++  ptr = buf;
++  buf[0] = '\0';
++  while ((s != NULL) && (ptr < buf + size - 10)) {
++    sprintf(ptr, "%ld ", s->sid);
++    s = s->next;
++    ptr = ptr + strlen(ptr);
++  }
++}
++
++
++/* Returns the path_ref or resv_ref of a session, whichever is lesser */
++double RSVPAgent::minref(session *s) {
++  if (s->path_ref == -1) {
++    return s->resv_ref;
++  }
++  if (s->resv_ref == -1) {
++    return s->path_ref;
++  }
++  if (s->path_ref < s->resv_ref) {
++    return s->path_ref;
++  } else {
++    return s->resv_ref;
++  }
++}
++
++
++/* Create a new PSB for a given session, add it to the session's PSB list,
++   reschedule the session for refreshing.
++   */
++void RSVPAgent::new_psb(session *s, double rate, long bucket, char ttl,
++			nsaddr_t sender, nsaddr_t phop, double refresh,
++			int iface, RSVPChecker *check) {
++  psb *p = new psb();
++  p->sender = new SENDER_TEMPLATE(sender, ip6_);
++  p->s_tspec = new SENDER_TSPEC(rate, bucket);
++  p->phop = new RSVP_HOP(phop, ip6_);
++  p->ttl = ttl;
++  p->iif = iface;
++  p->check = check;
++  if (phop > -1) { // Call came from API
++    p->timeout = (lifetime_factor_ + 0.5) * 1.5 * refresh + 
++      Scheduler::instance().clock();
++  }
++  if ((s->psb_list == NULL) || (s->psb_list->sender->get_addr() > sender)) {
++    p->next = s->psb_list;
++    s->psb_list = p;
++  } else {
++    psb *search = s->psb_list;
++    while ((search->next != NULL) && 
++	   (search->next->sender->get_addr() < sender)) {
++      search = search->next;
++    }
++    p->next = search->next;
++    search->next = p;
++  }
++  send_path_message(s, p);
++  /* Reschedule the session if this is the first PSB. Send a path
++     message for this PSB. */
++  if (s->path_ref == -1) {
++    s->path_ref = Scheduler::instance().clock() + s->path_tv->get_r();
++    reschedule_session(s);
++  }
++  /* Make an upcall to the API if necessary */
++  if ((noisy_ & UPC_PATH) && (phop > -1)) {
++    Tcl& tcl = Tcl::instance();
++    tcl.evalf("%s upcall-path %d %f %d %d", name(),  s->sid, rate, 
++	      bucket, sender);
++  }
++}
++
++
++/* Create a new RSB for a given session and add it to the session's 
++   RSB list. */
++rsb *RSVPAgent::new_rsb(session *s, psb *p, nsaddr_t sender, FLOWSPEC *fl,
++			const char *style, nsaddr_t nhop, double refresh,
++			nsaddr_t fromhop) {
++  rsb *r = new rsb();
++  r->nhop = new RSVP_HOP(nhop, ip6_);
++  r->sender = new FILTER_SPEC(sender, ip6_);
++  r->fspec = new FLOWSPEC(fl->get_contents());
++  r->p = p;
++  r->oifhop = fromhop;
++  r->modified = 1;
++  r->is_new = 1;
++  /* Only valid values for 'style' should arrive here */
++  if (strcasecmp(style, "FF") == 0) {
++    r->st = new STYLE(STYLE_FF);
++  }
++  if (nhop > -1) { // Call came from API
++    r->timeout = (lifetime_factor_ + 0.5) * 1.5 * refresh + 
++      Scheduler::instance().clock();
++  }
++  if ((s->rsb_list == NULL) || (s->rsb_list->sender->get_addr() > sender)) {
++    r->next = s->rsb_list;
++    s->rsb_list = r;
++  } else {
++    rsb *search = s->rsb_list;
++    while ((search->next != NULL) && 
++	   (search->next->sender->get_addr() < sender)) {
++      search = search->next;
++    }
++    r->next = search->next;
++    search->next = r;
++  }
++  return r;
++}
++
++
++/* Create a new session and add it to the session list, then return
++   a pointer to the session. */
++session *RSVPAgent::new_session_p(nsaddr_t dst, int fid, char local) {
++
++  RNG* defaultRNG = RNG::defaultrng() ;
++  
++  session *n, *s;
++  n = new session();
++  n->s = new SESSION(dst, 0, fid, ip6_);
++  // Set the refresh timer as described in section 3.7 of RFC 2205:
++  n->path_tv = new TIME_VALUES((defaultRNG->uniform_double() + 0.5) *
++			       refresh_ );
++  n->resv_tv = new TIME_VALUES((defaultRNG->uniform_double() + 0.5) *
++			       refresh_ );
++  n->sid = next_sid_;
++  n->local = local;
++  next_sid_++;
++  if (next_sid_ > MAXSID) {
++    next_sid_ = 0;
++  }
++  // The session list is sorted in descending order of the sid's
++  if ((s_list_ == NULL) || (s_list_->sid < n->sid)) {
++    n->next = s_list_;
++    s_list_ = n;
++  } else {
++    s = s_list_;
++    while ((s->next != NULL) && (s->next->sid > n->sid)) {
++      s = s->next;
++    }
++    n->next = s->next;
++    s->next = n;
++  }
++  return n;
++}
++
++
++/* Create a new session and add it to the session list, then return the
++   sid. */
++int RSVPAgent::new_session_sid(nsaddr_t dst, int fid, char local) {
++
++  RNG* defaultRNG = RNG::defaultrng() ;
++
++  session *n, *s;
++  n = new session();
++  n->s = new SESSION(dst, 0, fid, ip6_);
++  // Set the refresh timer as described in section 3.7 of RFC 2205:
++  n->path_tv = new TIME_VALUES((defaultRNG->uniform_double() + 0.5) *
++			       refresh_ );
++  n->resv_tv = new TIME_VALUES((defaultRNG->uniform_double() + 0.5) *
++			       refresh_ );
++  n->sid = next_sid_;
++  n->local = local;
++  next_sid_++;
++  if (next_sid_ > MAXSID) {
++    next_sid_ = 0;
++  }
++  // The session list is sorted in descending order of the sid's
++  if ((s_list_ == NULL) || (s_list_->sid < n->sid)) {
++    n->next = s_list_;
++    s_list_ = n;
++  } else {
++    s = s_list_;
++    while ((s->next != NULL) && (s->next->sid > n->sid)) {
++      s = s->next;
++    }
++    n->next = s->next;
++    s->next = n;
++  }
++  return n->sid;
++}
++
++
++void RSVPAgent::process_ff_request(session *s, int argc, 
++				  const char*const* argv) {
++  Tcl &tcl = Tcl::instance();
++  int i = 4;
++  rsb *r;
++  psb *p;
++  nsaddr_t sender;
++  char modified = 0;
++  FLOWSPEC *fl;
++  /* The following code parses a flow descriptor list which matches 
++     the following Backus-Naur form:
++     <flow descriptor list> ::= <FLOWSPEC> <FILTER_SPEC> |
++     <flow descriptor list><FF flow descriptor>
++     <FF flow descriptor> ::= [ <FLOWSPEC> ] <FILTER_SPEC>
++     This conforms with the description in RFC 2205 and means that there 
++     can be any number of FILTER_SPEC objects for a FLOWSPEC object. */
++  while (i < argc) {
++    if (i + 1 >= argc) {
++      tcl.evalf("%s RSVP: FLOWSPEC incomplete", name());
++    }
++    fl = new FLOWSPEC(atoi(argv[i]), atoi(argv[i+1]));
++    i += 2;
++    if ((i >= argc) || (argv[i][0] == '+')) {
++      tcl.evalf("%s RSVP: FILTER_SPEC missing", name());
++    }
++    while ((i < argc) && (argv[i][0] != '+')) {
++      if (argv[i][0] == '_') {
++	tcl.evalf("%s id", argv[i]);
++	sender = atoi(tcl.result());
++      } else {
++	sender = atoi(argv[i]);
++      }
++      if (((p = find_psb(s, sender)) == NULL) && (noisy_ & UPC_RESVERR)) {
++       	tcl.evalf("%s upcall-resv-error %s 4 0 %d", name(), argv[2],
++                   here_.addr_);
++      }
++      if ((r = find_rsb(s, sender, -1)) == NULL) {
++	new_rsb(s, p, sender, fl, "FF", -1, refresh_, -1);
++	num_rsb_++;
++      } else {
++	update_rsb(s, r, p, sender, fl, "FF", -1, refresh_, -1);
++      }
++      i++;
++    }
++    delete fl;
++  }
++  rsb *rsearch = s->rsb_list;
++  while (rsearch != NULL) {
++    if (rsearch->modified || rsearch->is_new) {
++      modified = 1;
++      rsearch->modified = 0;
++      rsearch->is_new = 0;
++    }
++    rsearch = rsearch->next;
++  }
++  refresh_resv(s, 0);
++}
++
++
++void RSVPAgent::process_path_message(RSVPmessage *msg, int iface,
++				     RSVPChecker *check) {
++  SESSION *se = (SESSION *)msg->get_first(1);
++  session *s;
++  if ((s = find_session_dst(se->get_dest(), se->get_fid())) == NULL) {
++    s = new_session_p(se->get_dest(), se->get_fid(), 0);
++  };
++  psb *p;
++  SENDER_TEMPLATE *sender = (SENDER_TEMPLATE *)msg->get_first(11);
++  TIME_VALUES *tv = (TIME_VALUES *)msg->get_first(5);
++  SENDER_TSPEC *s_tspec = (SENDER_TSPEC *)msg->get_first(12);
++  RSVP_HOP *hop = (RSVP_HOP *)msg->get_first(3);
++  if ((p = find_psb(s, sender->get_addr())) == NULL) {
++    new_psb(s, s_tspec->get_rate(), s_tspec->get_size(),
++	    msg->get_ttl(), sender->get_addr(), hop->get_hop(),
++	    tv->get_r(), iface, check);
++    num_psb_++;
++  } else {
++    update_psb(s, p, s_tspec->get_rate(), s_tspec->get_size(),
++	       msg->get_ttl(), sender->get_addr(), hop->get_hop(),
++	       tv->get_r(), iface, check);
++  }
++}
++
++
++void RSVPAgent::process_path_tear_message(RSVPmessage *msg, int iface,
++					  RSVPChecker *check) {
++  SESSION *se = (SESSION *)msg->get_first(1);
++  session *s;
++  if ((s = find_session_dst(se->get_dest(), se->get_fid())) != NULL) {
++    psb *p;
++    SENDER_TEMPLATE *sender = (SENDER_TEMPLATE *)msg->get_first(11);
++    RSVP_HOP *hop = (RSVP_HOP *)msg->get_first(3);
++    /* Note: Even if there was a SENDER_TSPEC object in this message,
++       it is supposed to be ignored according to RFC 2205. */
++    if ((p = find_psb(s, sender->get_addr())) != NULL) {
++      /* According to RFC 2205, the RSVP_HOP and the PHOP have to be
++	 identical. RFC 2209 does not mention that. */
++      if (p->phop->get_hop() == hop->get_hop()) {
++	if (noisy_ & UPC_PATHTEAR) {
++	  Tcl& tcl = Tcl::instance();
++	  tcl.evalf("%s upcall-path-tear %d %d", name(), s->sid, 
++		    sender->get_addr());
++	}
++	/* The necessary actions for deleting the path state would
++	   be fairly complicated. The PSB  and all corresponding RSBs
++	   have to be deleted and the session has to be removed if this 
++	   PSB was the last state block. To make this short, a 'trick' 
++	   will be used. The timeout for this PSB will be set to -1, and 
++	   then a check_path will be performed, which will definitely 
++	   remove this PSB (and perhaps even clean up some other PSBs 
++	   which are due for removal in the process). */
++	p->timeout = -1;
++	if (!check_path(s)) {
++	  reschedule_session(s);
++	}
++      }
++    }
++  }
++}
++
++
++void RSVPAgent::process_resv_conf_message(RSVPmessage *msg) {
++  RESV_CONFIRM *confirm = (RESV_CONFIRM *)msg->get_first(15);
++  // if (confirm->get_addr() == addr_ >> Address::instance().NodeShift_[1]) {
++  if (confirm->get_addr() == here_.addr_ ) {
++    SESSION *se = (SESSION *)msg->get_first(1);
++    session *s;
++    if ((s = find_session_dst(se->get_dest(), se->get_fid())) != NULL) {
++      FILTER_SPEC *sender = (FILTER_SPEC *)msg->get_first(10);
++      ERROR_SPEC *err = (ERROR_SPEC *)msg->get_first(6);
++      if (noisy_ & UPC_RESVCONF) {
++	Tcl& tcl = Tcl::instance();
++	tcl.evalf("%s upcall-resv-confirm %d %d %d", name(), s->s->get_fid(),
++		  sender->get_addr(), err->get_errnode());
++      }
++    }
++  } else {
++    if (ip6_) {
++      size_ = msg->get_length() + 40; // Size for standard IPv6 header
++    } else {
++      size_ = msg->get_length() + 24;
++    }
++    Tcl& tcl = Tcl::instance();
++    tcl.evalf("[Simulator instance] connect-rsvp-agents %d %d", 
++	      // addr_ >> Address::instance().NodeShift_[1],
++	      here_.addr_ ,
++	      confirm->get_addr());
++    Packet *pkt = allocpkt();
++    pkt->allocdata(msg->get_conlength());
++    memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++    send(pkt, 0);
++  }
++}
++
++
++void RSVPAgent::process_resv_err_message(RSVPmessage *msg) {
++  SESSION *se = (SESSION *)msg->get_first(1);
++  session *s;
++  rsb *r;
++  Tcl& tcl = Tcl::instance();
++  if ((s = find_session_dst(se->get_dest(), se->get_fid())) == NULL) {
++  } else {
++    RSVP_HOP *nhop = (RSVP_HOP *)msg->get_first(3);
++    FILTER_SPEC *sender = (FILTER_SPEC *)msg->get_first(10);
++    ERROR_SPEC *err = (ERROR_SPEC *)msg->get_first(6);
++    /* First mark all RSBs which route to the outgoing interface where
++       the ResvErr message came from. */
++    while (sender != NULL) {
++      r = s->rsb_list;
++      while (r != NULL) {
++	if ((r->p->phop->get_hop() == nhop->get_hop()) &&
++	    (r->sender->get_addr() == sender->get_addr())) {
++	  r->processed = 1;
++	}
++	r = r->next;
++      }
++      msg->delete_first(10);
++      sender = (FILTER_SPEC *)msg->get_first(10);
++    }
++    /* Now send ResvErr messages to each nhop that appears in the
++       marked RSBs. */
++    r = s->rsb_list;
++    while (r != NULL) {
++      if (r->processed) {
++	send_resv_err_message(s, msg, r);
++      }
++      r->processed = 0;
++      r = r->next;
++    }
++    if (noisy_ & UPC_RESVERR) {
++      tcl.evalf("%s upcall-resv-error %d %d %d %d", name(), 
++		s->sid, err->get_errcode(), err->get_errvalue(), 
++		err->get_errnode());
++    }
++  }
++}
++
++
++void RSVPAgent::process_resv_message(RSVPmessage *msg, nsaddr_t fromhop) {
++  SESSION *se = (SESSION *)msg->get_first(1);
++  session *s;
++  char modified = 0;
++  if ((s = find_session_dst(se->get_dest(), se->get_fid())) == NULL) {
++    send_resv_err_message(msg, 3);
++  } else {
++    RSVP_HOP *nhop = (RSVP_HOP *)msg->get_first(3);
++    TIME_VALUES *tv = (TIME_VALUES *)msg->get_first(5);
++    rsb *r;
++    psb *p;
++    FLOWSPEC *fl;
++    FILTER_SPEC *sender;
++    long senderaddr ; // SM
++    fl = (FLOWSPEC *)msg->get_first(9);
++    while (fl != NULL) {
++      sender = (FILTER_SPEC *)msg->get_first(10);
++      // There was a problem here - the sender is deleted below with
++      // the delete_first method, but is still assumed to contain valid
++      // data in the while loop below. To overcome this, I create a
++      // new variable - senderaddr - this is used below - SM
++      senderaddr = sender->get_addr() ;
++      if ((p = find_psb(s, sender->get_addr())) == NULL) {
++	send_resv_err_message(msg, 4);
++      } else {
++        if ((r = find_rsb(s, sender->get_addr(), nhop->get_hop())) == NULL) {
++	  r = new_rsb(s, p, sender->get_addr(), fl, "FF", nhop->get_hop(), 
++		tv->get_r(), fromhop);
++          num_rsb_++;
++        } else {
++	  update_rsb(s, r, p, sender->get_addr(), fl, "FF", nhop->get_hop(), 
++		     tv->get_r(), fromhop);
++        }
++
++
++        RESV_CONFIRM *confirm = (RESV_CONFIRM *)msg->get_first(15);
++        if (confirm != NULL) 
++	  r->confirm = new RESV_CONFIRM(confirm->get_contents());
++      
++        modified += update_traffic_control(s, r);
++      }
++
++      msg->delete_first(9);
++      msg->delete_first(10);
++      fl = (FLOWSPEC *)msg->get_first(9);
++    }
++    rsb *rsearch = s->rsb_list;
++    while (rsearch != NULL) {
++      if (rsearch->modified || rsearch->is_new) {
++	rsearch->modified = 0;
++	rsearch->is_new = 0;
++	/* Make an upcall to the API if necessary. One upcall is made for 
++	   each new RSB, and resv upcalls are not only made on leaf nodes. */
++	if (noisy_ & UPC_RESV) {
++	  Tcl& tcl = Tcl::instance();
++	  tcl.evalf("%s upcall-resv %d %f %d %d", name(),  s->sid, 
++		    rsearch->fspec->get_rate(), 
++                    rsearch->fspec->get_size(), 
++                    rsearch->sender->get_addr());
++	}
++      }
++      rsearch = rsearch->next;
++    }
++    refresh_resv(s, 0);
++  }
++}
++
++
++void RSVPAgent::process_resv_tear_message(RSVPmessage *msg) {
++  SESSION *se = (SESSION *)msg->get_first(1);
++  session *s;
++  // Tcl& tcl = Tcl::instance(); - unused
++  rsb *r, *r_list, *temp;
++  /* Check if a session exists for this ResvTear message, otherwise
++     drop the message silently. */
++  if ((s = find_session_dst(se->get_dest(), se->get_fid())) != NULL) {
++    FILTER_SPEC *sender;
++    RSVP_HOP *nhop = (RSVP_HOP *)msg->get_first(3);
++    r_list = 0;
++    sender = (FILTER_SPEC *)msg->get_first(10);
++    /* Read each FILTER_SPEC from the message and delete the corresponding
++       RSBs from the rsb_list, putting them in a different list for further
++       processing. */
++    while (sender != NULL) {
++      while ((s->rsb_list != NULL) && 
++	     (s->rsb_list->sender->get_addr() == sender->get_addr()) &&
++	     (s->rsb_list->nhop->get_hop() == nhop->get_hop())) {
++	temp = s->rsb_list;
++	s->rsb_list = temp->next;
++	temp->next = r_list;
++	r_list = temp;
++	update_traffic_control(s, temp);
++	if ((noisy_ & UPC_RESVTEAR) && (temp->timeout != -1)) {
++	  Tcl& tcl = Tcl::instance();
++	  tcl.evalf("%s upcall-resv-tear %d %d", name(),  s->sid, 
++		    temp->sender->get_addr());
++	}
++      }
++      if (s->rsb_list != NULL) {
++	r = s->rsb_list;
++	while (r != NULL) {
++	  if ((r->next != NULL) &&
++	      (r->next->sender->get_addr() == sender->get_addr()) &&
++	      (r->next->nhop->get_hop() == nhop->get_hop())) {
++	    temp = r->next;
++	    r->next = temp->next;
++	    temp->next = r_list;
++	    r_list = temp;
++	    num_rsb_--;
++	    update_traffic_control(s, temp);
++	    if ((noisy_ & UPC_RESVTEAR) && (temp->timeout != -1)) {
++	      Tcl& tcl = Tcl::instance();
++	      tcl.evalf("%s upcall-resv-tear %d %d", name(),  s->sid, 
++			temp->sender->get_addr());
++	    }
++	  }
++	  r = r->next;
++	}
++      }
++      msg->delete_first(10);
++      sender = (FILTER_SPEC *)msg->get_first(10);     
++    }
++  }
++  if (r_list != NULL) {
++    refresh_resv(s, 0);
++    while ((r_list != NULL) && (find_rsb_for_psb(s, r_list->p))) {
++      temp = r_list;
++      r_list = r_list->next;
++      clear_rsb(temp);
++      delete temp;
++    }
++    if (r_list != NULL) {
++      r = r_list;
++      while (r->next != NULL) {
++	if (find_rsb_for_psb(s, r->p)) {
++	  temp = r->next;
++	  r->next = temp->next;
++	  clear_rsb(temp);
++	  delete temp;
++	}
++      }
++    }
++    if (r_list != NULL) {
++      send_resv_tear_messages(s, r_list);
++    }
++    while (r_list != NULL) {
++      temp = r_list;
++      r_list = r_list->next;
++      clear_rsb(temp);
++      delete temp;
++    }
++  }
++}
++
++
++void RSVPAgent::recv(Packet* p, Handler* h) {
++  /* All packets are already being processed by the 'give' function,
++     so get rid of this packet. */
++  Packet::free(p);
++}
++
++
++/* Refresh the path/reservation state for all sessions that need to be
++   refreshed (usually that should only be the first session in the 
++   timer list).
++   */
++void RSVPAgent::refresh() {
++  double now = Scheduler::instance().clock();
++  /* PSB and RSB timeouts are checked with every refresh for this
++     session and not when the actual timeout occurs. That means that
++     path and reservation state might time out a bit slower in the
++     simulation than in a real system (though no refresh messages from
++     these states will be sent after the timeout), but this behaviour
++     is not incorrect, since RFC 2205 states that L (a state's lifetime)
++     should be equal *or greater* than (K + 0.5) * 1.5 * R. */
++  if ((t_list_ != NULL) && in_range(minref(t_list_), now)) {
++    check_path(t_list_);
++    if (t_list_ != NULL) {
++      check_resv(t_list_);
++    }
++    if (t_list_ != NULL) {
++      if (in_range(minref(t_list_), now)) {
++	if (minref(t_list_) == t_list_->path_ref) {
++	  refresh_path(t_list_);
++	} else {
++	  /* Force a reservation refresh */
++	  refresh_resv(t_list_, 1);
++	}
++      } else {
++	reschedule_session(t_list_);
++      }
++    }
++  }
++}
++
++
++/* Create and send path messages for this session, then reschedule
++   the session. */
++void RSVPAgent::refresh_path(session *s) {
++  psb *p = s->psb_list;
++  while (p != NULL) {
++    if (!is_mcast(s->s->get_dest()) ||
++	!is_leaf(p->sender->get_addr(), s->s->get_dest())) {
++      send_path_message(s, p);
++    }
++    p = p->next;
++  }
++  s->path_ref = Scheduler::instance().clock() + s->path_tv->get_r();
++  reschedule_session(s);
++}
++
++
++/* Create and send resv messages for this session, then reschedule
++   the session. If the 'forced' flag is off, this function merely checks
++   if a refresh is necessary (for example after a new RSB was added).
++   If it finds a reservation state that has to be updated, it performs a
++   normal refresh. */
++void RSVPAgent::refresh_resv(session *s, char forced) {
++  rsb *rsearch = s->rsb_list;
++  rsb *rsearch2;
++  while (rsearch != NULL) {
++    if (!rsearch->processed) {
++      /* Send a reservation message for all RSBs with the same PHOP
++	 in their corresponding PSBs as rsearch. */
++      if (send_resv_message(s, rsearch, forced) && !forced) {
++	/* A reservation has changed and had to be forwarded. Force
++	   a refresh for the whole reservation state. */
++	forced = 1;
++	rsearch2 = s->rsb_list;
++	while (rsearch2 != NULL) {
++	  rsearch2->processed = 0;
++	  rsearch2 = rsearch2->next;
++	}
++	rsearch2 = s->rsb_list;
++	while (rsearch2 != rsearch) {
++	  if (rsearch->processed) {
++	    send_resv_message(s, rsearch2, forced);
++	  }
++	  rsearch2 = rsearch2->next;
++	}
++      }
++    }
++    rsearch = rsearch->next;
++  }
++  rsearch = s->rsb_list;
++  while (rsearch != NULL) {
++    rsearch->processed = 0;
++    rsearch = rsearch->next;
++  }
++  if (forced) {
++    /* Only set a new refresh timeout if any messages were actually sent. */
++    s->resv_ref = Scheduler::instance().clock() + s->resv_tv->get_r();
++    reschedule_session(s);
++  }
++}
++
++
++/* Release a session. Remove it from the timer list and from the
++   session list, and send appropriate teardown messages for all path
++   and reservation states. */
++void RSVPAgent::release_session(session *s) {
++  session *search, *temp;
++  // Tcl& tcl = Tcl::instance(); - unused
++  /* First remove the session from the timer list */
++  if (t_list_ != NULL) {
++    if (t_list_ == s) {
++      t_list_ = t_list_->t_next;
++    } else {
++      search = t_list_;
++      while ((search->t_next != s) && (search->t_next != NULL)) {
++	search = search->t_next;
++      }
++      if (search->t_next != NULL) {
++	search->t_next = search->t_next->t_next;
++      }
++    }
++  }
++  /* Now remove the session from the session list and send teardown
++     messages for all existing path and reservation states. */
++  if (s_list_ == s) {
++    s_list_ = s_list_->next;
++    temp = s;
++  } else {
++    search = s_list_;
++    while ((search->next != s) && (search->next != NULL)) {
++      search = search->next;
++    }
++    temp = search->next;
++    search->next = search->next->next;
++  }
++  psb *p; 
++  rsb *r;
++  /* Tear down all reservation states */
++  send_resv_tear_messages(s, s->rsb_list);
++  while ((r = temp->rsb_list) != NULL) {
++    temp->rsb_list = temp->rsb_list->next;
++    update_traffic_control(temp, r);
++    clear_rsb(r);
++    delete r;
++    num_rsb_--;
++  }
++  /* Tear down all path states */
++  while ((p = temp->psb_list) != NULL) {
++    send_path_tear_message(s, p);
++    temp->psb_list = temp->psb_list->next;
++    clear_psb(p);
++    delete p;
++    num_psb_--;
++  }
++  delete temp;
++  if ((t_list_ != NULL) && (!t_list_->ref_flag)) {
++    t_list_->ref_flag = 1;
++    Tcl& tcl = Tcl::instance();
++    tcl.evalf("[Simulator instance] at %f \"%s refresh\"",
++	      minref(t_list_), name());
++  }
++}
++
++
++/* Remove session from timer list and from the session list (unless
++   it is a 'local' session. The difference between release_session and
++   remove_session is that remove_session does not remove local sessions.
++   */
++void RSVPAgent::remove_session(session *s) {
++  session *search;
++  if (t_list_ == s) {
++    t_list_ = t_list_->t_next;
++  } else {
++    search = t_list_;
++    while (search->t_next != s) {
++      search = search->t_next;
++    }
++    search->t_next = search->t_next->t_next;
++  }
++  if (!s->local) {
++    release_session(s);
++  }
++  if ((t_list_ != NULL) && (!t_list_->ref_flag)) {
++    t_list_->ref_flag = 1;
++    Tcl& tcl = Tcl::instance();
++    tcl.evalf("[Simulator instance] at %f \"%s refresh\"",
++	      minref(t_list_), name());
++  }
++}
++
++
++/* Reschedule a session */
++void RSVPAgent::reschedule_session(session *s) {
++  session *search;
++  s->ref_flag = 0;
++  if (t_list_ == NULL) {
++    t_list_ = s;
++  } else {
++    if (t_list_ == s) {
++      t_list_ = t_list_->t_next;
++    } else {
++      search = t_list_;
++      /* A doubly linked list would make the following code faster,
++	 but probably not simpler. However, that feature can be added
++	 when it turns out that the simulations run too slow. */
++      while ((search->t_next != NULL) && (search->t_next != s)) {
++	search = search->t_next;
++      }
++      if (search->t_next == s) {
++	search->t_next = search->t_next->t_next;
++      }
++    }
++    if (t_list_ == NULL) {
++      t_list_ = s;
++    } else {
++      if (minref(s) < minref(t_list_)) {
++	s->t_next = t_list_;
++	t_list_ = s;
++      } else {
++	search = t_list_;
++	while ((search->t_next != NULL) && 
++	       (minref(search->t_next) < minref(s))) {
++	  search = search->t_next;
++	}
++	s->t_next = search->t_next;
++	search->t_next = s; 
++      }
++    }
++  }
++  /* If the first element in the timer list hasn't been scheduled for
++     refreshing yet, call Tcl to schedule it. In the ideal case, only
++     the first element of the timer list is scheduled. The worst case, 
++     that the scheduler has one entry for each session in each RSVP
++     agent should be avoided.
++     */
++  if (!t_list_->ref_flag) {
++    t_list_->ref_flag = 1;
++    Tcl& tcl = Tcl::instance();
++    tcl.evalf("[Simulator instance] at %f \"%s refresh\"",
++	      minref(t_list_), name());
++  }
++}
++
++
++/* Create and send a path message for a PSB in a session */
++void RSVPAgent::send_path_message(session *s, psb *p) {
++  if (nam_) {
++    type_ = PT_RSVP_PATH;
++  }
++  // if ((s->s->get_dest() != addr_ >> Address::instance().NodeShift_[1]) &&
++  if ((s->s->get_dest() != here_.addr_ ) && // SM
++      (p->ttl >= 1)) {
++    if (is_mcast(s->s->get_dest())) {
++      dst_.addr_ = s->s->get_dest();
++    } else {
++      // dst_ = s->s->get_dest() << Address::instance().NodeShift_[1];
++      dst_.addr_ = s->s->get_dest() ;
++    }
++    RSVPmessage *msg = new RSVPmessage(PATH, p->ttl-1);
++    msg->add_object(new SESSION(s->s->get_contents()));
++    msg->add_object(new TIME_VALUES(s->path_tv->get_contents()));
++    msg->add_object(new SENDER_TEMPLATE(p->sender->get_contents()));
++    msg->add_object(new SENDER_TSPEC(p->s_tspec->get_contents()));
++    // msg->add_object(new RSVP_HOP(addr_ >> Address::instance().NodeShift_[1],
++    msg->add_object(new RSVP_HOP(here_.addr_ , 
++				 ip6_));
++    if (ip6_) {
++      size_ = msg->get_length() + 40; // Size for standard IPv6 header
++    } else {
++      size_ = msg->get_length() + 24;
++    }
++    fid_ = 46;
++    Packet *pkt = allocpkt();
++    //hdr_cmn* hdr = (hdr_cmn*)pkt->access(off_cmn_);
++    hdr_cmn* hdr = hdr_cmn::access(pkt);
++    pkt->allocdata(msg->get_conlength());
++    memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++    if (p->phop->get_hop() != -1) {
++      hdr->iface_ = p->iif;
++      //hdr_ip *ip_hdr = (hdr_ip*)pkt->access(off_ip_);
++      hdr_ip *ip_hdr = hdr_ip::access(pkt) ;
++      //ip_hdr->src_ = p->sender->get_addr() << Address::instance().NodeShift_[1];
++      ip_hdr->saddr() = p->sender->get_addr() ; //SM
++      }
++
++    send(pkt,0);
++    delete msg;
++  }
++}
++
++/* Create and send a path tear message for a PSB in a session */
++void RSVPAgent::send_path_tear_message(session *s, psb *p) {
++  if (nam_) {
++    type_ = PT_PATH_TEAR;
++  }
++
++  if ((s->s->get_dest() != here_.addr_)  && (p->ttl > 1)) {
++    if (!is_mcast(s->s->get_dest()) ||
++	!is_leaf(p->sender->get_addr(), s->s->get_dest())) {
++      if (s->s->get_dest() >= 1 << Address::instance().McastShift_) {
++	dst_.addr_ = s->s->get_dest();
++      } else {
++	// dst_ = s->s->get_dest() << Address::instance().NodeShift_[1];
++	dst_.addr_ = s->s->get_dest() ;
++      }
++      RSVPmessage *msg = new RSVPmessage(PATHTEAR, p->ttl-1);
++      msg->add_object(new SESSION(s->s->get_contents()));
++      msg->add_object(new SENDER_TEMPLATE(p->sender->get_contents()));
++      //msg->add_object(new RSVP_HOP(addr_ >> Address::instance().NodeShift_[1],
++      msg->add_object(new RSVP_HOP(here_.addr_ , 
++				   ip6_));
++      /* A SENDER_TSPEC object may be added to the message here. RFC 2205
++	 is unclear about that though. At one point it says that
++	 a SENDER_TSPEC is an obligatory part of a sender descriptor,
++	 later it says that it may be ommited in a PathTear message and
++	 will be ignored. */
++      size_ = msg->get_length();
++      if (ip6_) {
++	size_ = msg->get_length() + 40; // Size for standard IPv6 header
++      } else {
++	size_ = msg->get_length() + 24;
++      }
++      fid_ = 46;
++      Packet *pkt = allocpkt();
++      //hdr_cmn* hdr = (hdr_cmn*)pkt->access(off_cmn_);
++      hdr_cmn* hdr = hdr_cmn::access(pkt) ;
++      pkt->allocdata(msg->get_conlength());
++      memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++      if (p->phop->get_hop() != -1) {
++	hdr->iface_ = p->iif;
++	//hdr_ip *ip_hdr = (hdr_ip*)pkt->access(off_ip_);
++	hdr_ip *ip_hdr = hdr_ip::access(pkt) ;
++	// ip_hdr->src_ = p->sender->get_addr() << Address::instance().NodeShift_[1];
++	ip_hdr->saddr() = p->sender->get_addr() ; //SM
++      }
++
++      send(pkt,0);
++      delete msg;
++    }
++  }
++}
++
++
++/* Create and send a resv confirm message. */
++void RSVPAgent::send_resv_conf_message(session *s, rsb *r) {
++  if (nam_) {
++    type_ = PT_RESV_CONF;
++  }
++  RSVPmessage *msg = new RSVPmessage(RESVCONF, 32);
++  msg->add_object(new SESSION(s->s->get_contents()));
++  msg->add_object(new STYLE(r->st->get_contents()));
++  msg->add_object(new FILTER_SPEC(r->sender->get_addr(), ip6_));
++  // msg->add_object(new ERROR_SPEC(addr_ >> Address::instance().NodeShift_[1],
++  msg->add_object(new ERROR_SPEC(here_.addr_ , 
++				 0, 0, 0, ip6_));
++  msg->add_object(new RESV_CONFIRM(r->confirm->get_contents()));
++  if (ip6_) {
++    size_ = msg->get_length() + 40; // Size for standard IPv6 header
++  } else {
++    size_ = msg->get_length() + 24;
++  }
++  Tcl& tcl = Tcl::instance();
++  tcl.evalf("[Simulator instance] connect-rsvp-agents %d %d", 
++	    // addr_ >> Address::instance().NodeShift_[1],
++	    here_.addr_ ,
++	    r->confirm->get_addr());
++  fid_ = 46;
++  Packet *pkt = allocpkt();
++  pkt->allocdata(msg->get_conlength());
++  memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++  send(pkt, 0);
++  delete msg;
++}
++
++
++/* Create and send a resv message based on a reservation message that
++   was received. */
++void RSVPAgent::send_resv_err_message(RSVPmessage *resvmsg, int code) {
++  if (nam_) {
++    type_ = PT_RESV_ERR;
++  }
++  RSVPmessage *msg = new RSVPmessage(RESVERR, 32);
++  msg->add_object(new SESSION(((SESSION *)resvmsg->get_first(1))->get_contents()));
++  // msg->add_object(new RSVP_HOP(addr_ >> Address::instance().NodeShift_[1],
++  msg->add_object(new RSVP_HOP(here_.addr_ , 
++			       ip6_));
++  msg->add_object(new STYLE(((STYLE *)resvmsg->get_first(8))->get_contents()));
++  FILTER_SPEC *sender;
++  sender = (FILTER_SPEC *)resvmsg->get_first(10);
++  //  while (sender != NULL) {
++  //    msg->add_object(new FILTER_SPEC(sender->get_contents()));
++  //    resvmsg->delete_first(10);
++  //    sender = (FILTER_SPEC *)resvmsg->get_first(10);
++  //  }
++  msg->add_object (new FILTER_SPEC (sender->get_contents()));
++  // msg->add_object(new ERROR_SPEC(addr_ >> Address::instance().NodeShift_[1],
++  msg->add_object(new ERROR_SPEC(here_.addr_ , 
++				 0, code, 0, ip6_));
++  if (ip6_) {
++    size_ = msg->get_length() + 40; // Size for standard IPv6 header
++  } else {
++    size_ = msg->get_length() + 24;
++  }
++  // dst_ = ((RSVP_HOP *)resvmsg->get_first(3))->get_hop() << Address::instance().NodeShift_[1];
++  dst_.addr_ = ((RSVP_HOP *)resvmsg->get_first(3))->get_hop() ; 
++  fid_ = 46;
++  Packet *pkt = allocpkt();
++  pkt->allocdata(msg->get_conlength());
++  memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++  send(pkt, 0);
++  delete msg;
++}
++
++
++/* Create and send a resv err message (an admission control error,
++   to be exact) for an RSB. */
++void RSVPAgent::send_resv_err_message(session *s, rsb *r) {
++  if (nam_) {
++    type_ = PT_RESV_ERR;
++  }
++  RSVPmessage *msg = new RSVPmessage(RESVERR, 32);
++  msg->add_object(new SESSION(s->s->get_contents()));
++  // msg->add_object(new RSVP_HOP(addr_ >> Address::instance().NodeShift_[1],
++  msg->add_object(new RSVP_HOP(here_.addr_ , 
++			       ip6_));
++  msg->add_object(new STYLE(r->st->get_contents()));
++  msg->add_object(new FILTER_SPEC(r->sender->get_addr(), ip6_));
++  // msg->add_object(new ERROR_SPEC(addr_ >> Address::instance().NodeShift_[1],
++  msg->add_object(new ERROR_SPEC(here_.addr_ , 
++				 0, 1, 0, ip6_));
++  if (ip6_) {
++    size_ = msg->get_length() + 40; // Size for standard IPv6 header
++  } else {
++    size_ = msg->get_length() + 24;
++  }
++  // dst_ = r->nhop->get_hop() << Address::instance().NodeShift_[1];
++  dst_.addr_ = r->nhop->get_hop() ; 
++  fid_ = 46;
++  Packet *pkt = allocpkt();
++  pkt->allocdata(msg->get_conlength());
++  memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++  send(pkt, 0);
++  delete msg;
++}
++
++
++/* Create and send a resv err message for all RSBs with the same PHOP in
++   their corresponding PSBs. */
++void RSVPAgent::send_resv_err_message(session *s, 
++				      RSVPmessage *resvmsg, rsb *r) {
++  if (nam_) {
++    type_ = PT_RESV_ERR;
++  }
++  if (r->nhop->get_hop() != -1) {
++    RSVPmessage *msg = new RSVPmessage(RESVERR, 32);
++    msg->add_object(new SESSION(((SESSION *)resvmsg->get_first(1))->get_contents()));
++    // msg->add_object(new RSVP_HOP(addr_ >> Address::instance().NodeShift_[1],
++    msg->add_object(new RSVP_HOP(here_.addr_ , 
++				 ip6_));
++    msg->add_object(new STYLE(((STYLE *)resvmsg->get_first(8))->get_contents()));
++    rsb *rsearch = r;
++    while (rsearch != NULL) {
++      if (rsearch->processed && 
++	  (rsearch->nhop->get_hop() == r->nhop->get_hop())) {
++	rsearch->processed = 0;
++	msg->add_object(new FILTER_SPEC(rsearch->sender->get_addr(), ip6_));
++      }
++      rsearch = rsearch->next;
++    }
++    msg->add_object(new ERROR_SPEC(((ERROR_SPEC *)resvmsg->get_first(6))->get_contents()));
++    if (ip6_) {
++      size_ = msg->get_length() + 40; // Size for standard IPv6 header
++    } else {
++      size_ = msg->get_length() + 24;
++    }
++    // dst_ = r->nhop->get_hop() << Address::instance().NodeShift_[1];
++    dst_.addr_ = r->nhop->get_hop() ; 
++    fid_ = 46;
++    Packet *pkt = allocpkt();
++    pkt->allocdata(msg->get_conlength());
++    memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++    send(pkt, 0);
++    delete msg;
++  }
++}
++
++
++/* Create and send a resv message for all RSBs with the same PHOP in
++   their corresponding PSBs. */
++int RSVPAgent::send_resv_message(session *s, rsb *r, char forced) {
++  if (nam_) {
++    type_ = PT_RSVP_RESV;
++  }
++  char snd = 0;
++  if (r->p->phop->get_hop() != -1) {
++    RSVPmessage *msg = new RSVPmessage(RESV, 32);
++    msg->add_object(new SESSION(s->s->get_contents()));
++    msg->add_object(new TIME_VALUES(s->resv_tv->get_contents()));
++    // msg->add_object(new RSVP_HOP(addr_ >> Address::instance().NodeShift_[1],
++    msg->add_object(new RSVP_HOP(here_.addr_ , 
++				 ip6_));
++    msg->add_object(new STYLE(r->st->get_contents()));
++    if (s->confirm) {
++      // msg->add_object(new RESV_CONFIRM(addr_ >> Address::instance().NodeShift_[1], ip6_));
++      msg->add_object(new RESV_CONFIRM(here_.addr_ , ip6_));
++      s->confirm = 0;
++    }
++    rsb *rsearch = s->rsb_list;
++    nsaddr_t phop = r->p->phop->get_hop();
++    nsaddr_t sender;
++    double lub_rate;
++    long lub_size;
++    rsb *rsearch2, *rsearch3;
++    char merged;
++    tcsb *t;
++    while (rsearch != NULL) {
++      if (!rsearch->processed && (rsearch->p->phop->get_hop() == phop)) {
++	/* Calculate the LUB for all RSBs that match 'sender'. */
++	lub_rate = 0;
++	lub_size = 0;
++	sender = rsearch->sender->get_addr();
++	rsearch2 = rsearch;
++	while (rsearch2 != NULL) {
++	  if (rsearch2->confirm != NULL) {
++	    merged = 0;
++	    rsearch3 = s->rsb_list;
++	    while (!merged && (rsearch3 != NULL)) {
++	      if ((rsearch3->p->phop->get_hop() == phop) &&
++		  (rsearch3 != rsearch2) &&
++		  (rsearch2->fspec->get_rate() <= 
++		   rsearch3->fspec->get_rate()) && 
++		  (rsearch2->fspec->get_size() <=
++		   rsearch3->fspec->get_rate())) {
++		merged = 1;
++	      }
++	      rsearch3 = rsearch3->next;
++	    }
++	    if (merged) {
++	      send_resv_conf_message(s, rsearch2);
++	    } else {
++	      msg->add_object(new RESV_CONFIRM(rsearch2->confirm->get_contents()));
++	    }
++	    delete rsearch2->confirm;
++	    rsearch2->confirm = NULL;
++	  }
++	  if ((rsearch2->p->phop->get_hop() == phop) &&
++	      (rsearch2->sender->get_addr() == sender)) {
++	    if (rsearch2->fspec->get_rate() > lub_rate) {
++	      lub_rate = rsearch2->fspec->get_rate();
++	    }
++	    if (rsearch2->fspec->get_size() > lub_size) {
++	      lub_size = rsearch2->fspec->get_size();
++	    }
++	    rsearch2->processed = 1;
++	  }
++	  rsearch2 = rsearch2->next;
++	}
++	t = s->tcsb_list;
++	while ((t != NULL) && ((t->sender != sender) || 
++			       (t->oifhop != rsearch->oifhop))) {
++	  t = t->next;
++	}
++	if (t == NULL) {
++	  t = new tcsb();
++	  t->fl = new FLOWSPEC(0, 0);
++	  t->ofl = new FLOWSPEC(0, 0);
++	  t->oifhop = rsearch->oifhop;
++	  t->sender = sender;
++	  t->next = s->tcsb_list;
++	  s->tcsb_list = t;
++	}
++	if ((lub_rate != t->ofl->get_rate()) || 
++	    (lub_size != t->ofl->get_size()) ||
++	    forced) {
++	  msg->add_object(new FLOWSPEC(lub_rate, lub_size));
++	  msg->add_object(new FILTER_SPEC(sender, ip6_));
++	  snd = 1;
++	  delete t->ofl;
++	  t->ofl = new FLOWSPEC(lub_rate, lub_size);
++	}
++      }
++      rsearch = rsearch->next;
++    }
++    if (snd) {
++      if (ip6_) {
++	size_ = msg->get_length() + 40; // Size for standard IPv6 header
++      } else {
++	size_ = msg->get_length() + 24;
++      }
++      // dst_ = r->p->phop->get_hop() << Address::instance().NodeShift_[1];
++      dst_.addr_ = r->p->phop->get_hop() ;
++      fid_ = 46;
++      Packet *pkt = allocpkt();
++      pkt->allocdata(msg->get_conlength());
++      memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++      send(pkt, 0);
++      delete msg;
++    }
++  }
++  return snd;
++}
++
++
++/* Create and send a resv tear message for a list of RSBs in a session */
++void RSVPAgent::send_resv_tear_messages(session *s, rsb *r_list) {
++  if (nam_) {
++    type_ = PT_RESV_TEAR;
++  }
++  rsb *rsearch = r_list;
++  rsb *rsearch2, *rsearch3;
++  while (rsearch != NULL) {
++    if ((rsearch->p->phop->get_hop() != -1) && !rsearch->processed) {
++      RSVPmessage *msg = new RSVPmessage(RESVTEAR, 32);
++      msg->add_object(new SESSION(s->s->get_contents()));
++      // msg->add_object(new RSVP_HOP(addr_ >> Address::instance().NodeShift_[1],
++      msg->add_object(new RSVP_HOP(here_.addr_ , 
++				   ip6_));
++      msg->add_object(new STYLE(rsearch->st->get_contents()));
++      nsaddr_t phop = rsearch->p->phop->get_hop();
++      nsaddr_t sender;
++      rsearch2 = rsearch;
++      while (rsearch2 != NULL) {
++	sender = rsearch2->sender->get_addr();
++	if (!rsearch2->processed && (rsearch2->p->phop->get_hop() == phop)) 
++	  {
++	    sender = rsearch2->sender->get_addr();
++	    rsearch3 = rsearch;
++	    while (rsearch3 != NULL) {
++	      if ((rsearch3->p->phop->get_hop() == phop) &&
++		  (rsearch3->sender->get_addr() == sender)) {
++		/* The 'processed' flags will not have to be deleted from
++		   the RSBs later, since the r_list will always be deleted
++		   after being processed by this function. */
++		rsearch3->processed = 1;
++	      }
++	      rsearch3 = rsearch3->next;
++	  }
++	  msg->add_object(new FILTER_SPEC(sender, ip6_));
++	}
++	rsearch2 = rsearch2->next;
++      }
++      if (ip6_) {
++	size_ = msg->get_length() + 40; // Size for standard IPv6 header
++      } else {
++	size_ = msg->get_length() + 24;
++      }
++      // dst_ = rsearch->p->phop->get_hop() << Address::instance().NodeShift_[1];
++      dst_.addr_ = rsearch->p->phop->get_hop() ;
++      fid_ = 46;
++      Packet *pkt = allocpkt();
++      // hdr_cmn* hdr = (hdr_cmn*)pkt->access(off_cmn_); - unused
++      pkt->allocdata(msg->get_conlength());
++      memcpy(pkt->accessdata(), msg->get_contents(), msg->get_conlength());
++      send(pkt, 0);
++      delete msg;
++    }
++    rsearch = rsearch->next;
++  }
++}
++
++
++/* Update an existing PSB with new values. */
++void RSVPAgent::update_psb(session *s, psb *p, double rate, long bucket, 
++			   char ttl, nsaddr_t sender, nsaddr_t phop, 
++			   double refresh, int iface, RSVPChecker *check) {
++  /* The following is slightly different from what the RSVP Processing
++     Rules suggest for updated PSBs */
++  char diff = ((p->sender->get_addr() != sender) || 
++	       (p->s_tspec->get_rate() != rate) ||
++	       (p->s_tspec->get_size() != bucket) ||
++	       (p->ttl != ttl));
++  clear_psb(p);
++  p->sender = new SENDER_TEMPLATE(sender, ip6_);
++  p->s_tspec = new SENDER_TSPEC(rate, bucket);
++  p->phop = new RSVP_HOP(phop, ip6_);
++  p->ttl = ttl;
++  p->iif = iface;
++  p->check = check;
++  if (phop > -1) { // Doesn't make sense when call came from API
++    p->timeout = (lifetime_factor_ + 0.5) * 1.5 * refresh + 
++      Scheduler::instance().clock();
++  }
++  /* Send a path message for this PSB to inform downstream nodes
++     of the updated path state. */
++  if ((diff) || 
++      ((is_mcast(s->s->get_dest())) && 
++	(is_leaf(p->sender->get_addr(), s->s->get_dest())))) {
++    send_path_message(s, p);
++    s->path_ref = Scheduler::instance().clock() + s->path_tv->get_r();
++    reschedule_session(s);
++    /* Make an upcall to the API if necessary */
++    if ((noisy_ & UPC_PATH) && (diff)) {
++      Tcl& tcl = Tcl::instance();
++      tcl.evalf("%s upcall-path %d %f %d %d", name(),  s->sid, rate, 
++		bucket, sender);
++    }
++  }
++}
++
++
++/* Update an existing RSB with new values. */
++void RSVPAgent::update_rsb(session *s, rsb *r, psb *p, nsaddr_t sender, 
++			   FLOWSPEC *fl, const char *style, nsaddr_t nhop, 
++			   double refresh, nsaddr_t fromhop) {
++  long nstyle;
++  if (strcasecmp(style, "FF") == 0) {
++    nstyle = STYLE_FF;
++  }
++  r->modified = ((r->fspec->get_rate() != fl->get_rate()) ||
++		 (r->fspec->get_size() != fl->get_size()) ||
++		 (r->st->get_style() != nstyle) ||
++		 (r->p != p) ||
++		 (r->oifhop != fromhop));
++  if (nhop > -1) { // Doesn't make sense when call came from API
++    r->timeout = (lifetime_factor_ + 0.5) * 1.5 * refresh + 
++      Scheduler::instance().clock();
++  }
++  /* Store the old values, so in case the reservation is rejected by
++     admission control, it can be restored. */
++  r->old = new rsb();
++  r->old->nhop = r->nhop;
++  r->old->sender = r->sender;
++  r->old->fspec = r->fspec;
++  r->old->st = r->st;
++  r->old->oifhop = r->oifhop;
++  r->old->p = r->p;
++  if (r->modified) {
++    r->nhop = new RSVP_HOP(nhop, ip6_);
++    r->sender = new FILTER_SPEC(sender, ip6_);
++    r->fspec = new FLOWSPEC(fl->get_contents());
++    r->st = new STYLE(nstyle);
++    r->oifhop = fromhop;
++    r->p = p;
++  }
++}
++
++
++
++/* The following function has not been tested thoroughly for
++   measurement based admission control algorithms. It will probably be
++   replaced sooner or later by algorithm-specific functions. */
++int modify_flow(ADC *adc, int cl, double r_old, int b_old, double r, int b) {
++  if (adc->peak_rate(cl, r, b) <= adc->peak_rate(cl, r_old, b_old)) {
++    /* The new reservation is smaller than the old one =>
++       notify admission control of the change and return 1 */
++    adc->teardown_action(cl, r_old, b_old);
++    adc->admit_flow(cl, r, b);
++    return 1;
++  } else {
++    /* Check if the new flow can be admitted. */
++    adc->teardown_action(cl, r_old, b_old);
++    if (adc->admit_flow(cl, r, b)) {
++      /* Yes => return 1 */
++      return 1;
++    } else {
++      /* No => re-install the old flow */
++      adc->admit_flow(cl, r_old, b_old);
++      return 0;
++    }
++  }
++}
++
++
++
++/* Find all RSBs that match the (session, sender, nhop) triple for the
++   'active' RSB, compute the LUB of their flowspecs then query admission 
++   control and perform a reservation if possible. This function only works 
++   for the FF style. */
++int RSVPAgent::update_traffic_control(session *s, rsb *r) {
++  rsb *rsearch = s->rsb_list;
++  nsaddr_t sender = r->sender->get_addr();
++  nsaddr_t nhop = r->nhop->get_hop();
++  nsaddr_t oifhop = r->oifhop;
++  double lub_rate = 0;
++  long lub_size = 0;
++  tcsb *t = s->tcsb_list;
++  tcsb *ts;
++  ADC *adc;
++  char admitted;
++  char refresh_needed = 0;
++  char is_biggest = 1;
++  Tcl& tcl = Tcl::instance();
++  if (nhop != -1) {
++    /* First find the matching TCSB for the (session, sender, oif) triple */
++    while ((t != NULL) && ((t->sender != sender) || (t->oifhop != oifhop))) {
++      t = t->next;
++    }
++    /* Now compute the LUB for the flowspecs from all matching RSBs. */
++    while (rsearch != NULL) {
++      if ((rsearch->sender->get_addr() == sender) && 
++	  (rsearch->oifhop == oifhop)) {
++	if ((r != rsearch) &&
++	    (rsearch->fspec->get_rate() >= r->fspec->get_rate()) &&
++	    (rsearch->fspec->get_size() >= r->fspec->get_size())) {
++	  is_biggest = 0;
++	}
++	if (rsearch->fspec->get_rate() > lub_rate) {
++	  lub_rate = rsearch->fspec->get_rate();
++	}
++	if (rsearch->fspec->get_size() > lub_size) {
++	  lub_size = rsearch->fspec->get_size();
++	}
++      }
++      rsearch = rsearch->next;
++    }
++    /* Check first if the LUB flowspec is zero and a tcspec exists.
++       In that case, remove the existing reservation, because this
++       can only happen when an RSB was removed (e.g. when a teardown
++       message arrived). */
++    if ((t != NULL) && (lub_rate == 0)) {
++      /* Notify admission control of the change. */
++      tcl.evalf("%s get-adc %d %d", name(),
++		// addr_ >> Address::instance().NodeShift_[1], r->oifhop);
++		here_.addr_ , r->oifhop);
++      adc = (ADC *)TclObject::lookup(tcl.result());
++      modify_flow(adc, 1, t->fl->get_rate(), t->fl->get_size(), 0, 0);
++      tcl.evalf("[Simulator instance] delete-filter-fid %d %d %d %d",
++		// addr_ >> Address::instance().NodeShift_[1], r->oifhop,
++		here_.addr_ , r->oifhop,
++		sender, s->s->get_fid());
++      num_flows_--;
++      tcl.evalf("[Simulator instance] delete-reservation %d %d %s",
++		// addr_ >> Address::instance().NodeShift_[1], r->oifhop,
++		here_.addr_ , r->oifhop,
++		t->handle->name());
++      /* Delete t */
++      if (t == s->tcsb_list) {
++	s->tcsb_list = t->next;
++      } else {
++	ts = s->tcsb_list;
++	while (ts->next != t) {
++	  ts = ts->next;
++	}
++	ts->next = t->next;
++      }
++      delete t->fl;
++      delete t->ofl;
++      delete t;
++    } else {
++      /* Now query admission control for lub_rate and lub_size. */
++      tcl.evalf("%s get-adc %d %d", name(),
++		// addr_ >> Address::instance().NodeShift_[1], r->oifhop);
++		here_.addr_ , r->oifhop);
++      adc = (ADC *)TclObject::lookup(tcl.result());
++      if (t == NULL) { // New flow
++	admitted = adc->admit_flow(1, lub_rate, lub_size);
++      } else { // Modification of existing flow
++	admitted = modify_flow(adc, 1, t->fl->get_rate(),
++				    t->fl->get_size(), lub_rate, lub_size);
++      }
++      if (!admitted) {
++	send_resv_err_message(s, r);
++	if (r->confirm != NULL) {
++	  delete r->confirm;
++	  r->confirm = NULL;
++	}
++	/* Delete the active rsb if it is new, or return it to the old state
++	   if it was modified. */
++	if (r->is_new) {
++	  if (s->rsb_list == r) {
++	    s->rsb_list = r->next;
++	    delete r;
++	  } else {
++	    rsearch = s->rsb_list;
++	    while ((rsearch != NULL) && (rsearch->next != r)) {
++	      rsearch = rsearch->next;
++	    }
++	    rsearch->next = r->next;
++	    clear_rsb(r);
++	    delete r;
++	    num_rsb_--;
++	  }
++	} else {
++	  clear_rsb(r);
++	  r->nhop = r->old->nhop;
++	  r->sender = r->old->sender;
++	  r->fspec = r->old->fspec;
++	  r->st = r->old->st;
++	  r->p = r->old->p;
++	  r->oifhop = r->old->oifhop;
++	  delete r->old;
++	  r->old = NULL;
++	}
++      } else {
++	/* Delete all the pointers to the former RSB values in the
++	   active RSB if it was modified. They are no longer needed. */
++	if (!r->is_new) {
++	  delete r->old;
++	  r->old = NULL;
++	}
++	/* Does the RSB have a RESV_CONFIRM object and was it merged into
++	   an existing reservation, or is this the leaf node for this RSB? 
++	   If so, send a ResvConf message and remove the RESV_CONFIRM 
++	   object. */
++	if ((r->confirm != NULL) && 
++	    (!is_biggest || (r->p->phop->get_hop() == -1))) {
++	  send_resv_conf_message(s, r);
++	  delete r->confirm;
++	  r->confirm = NULL;
++	}
++	/* Perform the actual reservation. If there is no TCSB yet, 
++	   create one and get a new handle to a WFQClass from Tcl. Otherwise
++	   modify the reservation with the existing handle. */
++	if (t == NULL) {
++	  t = new tcsb();
++	  t->fl = new FLOWSPEC(lub_rate, lub_size);
++	  t->ofl = new FLOWSPEC(0, 0);
++	  t->oifhop = oifhop;
++	  t->sender = sender;
++	  t->next = s->tcsb_list;
++	  s->tcsb_list = t;
++	  tcl.evalf("[Simulator instance] add-reservation %d %d %f %d",
++		    // addr_ >> Address::instance().NodeShift_[1],
++		    here_.addr_ ,
++		    r->oifhop, lub_rate, lub_size);
++	  num_flows_++;
++	  t->handle = TclObject::lookup(tcl.result());
++	  tcl.evalf("[Simulator instance] add-filter-fid %d %d %s %d %d",
++		    // addr_ >> Address::instance().NodeShift_[1], r->oifhop,
++		    here_.addr_ , r->oifhop,
++		    t->handle->name(), sender, s->s->get_fid());
++	  refresh_needed = 1;
++	} else {
++	  if ((t->fl->get_rate() != lub_rate) || (t->fl->get_size() != lub_size)) {
++	    delete t->fl;
++	    t->fl = new FLOWSPEC(lub_rate, lub_size);
++	    tcl.evalf("[Simulator instance] modify-reservation %d %d %s %f %d",
++		      // addr_ >> Address::instance().NodeShift_[1],
++		      here_.addr_ ,
++		      r->oifhop, t->handle->name(), lub_rate, lub_size);
++	    refresh_needed = 1;
++	  }
++	}
++      }
++    }
++  }
++  return refresh_needed;
++}
+diff -urN ns-2.27/rsvp/rsvp.h ns-2.27-rsvp/rsvp/rsvp.h
+--- ns-2.27/rsvp/rsvp.h	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/rsvp.h	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,202 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++#ifndef ns_rsvp_h
++#define ns_rsvp_h
++
++
++#include "packet.h"
++#include "ip.h"
++#include "agent.h"
++#include "address.h"
++#include "adc.h"
++#include "rsvp-objects.h"
++#include "rsvp-messages.h"
++#include "rsvp-link.h"
++
++
++/* The MAXSID was chosen arbitrarily, but should be enough for most
++   simulations */
++#define MAXSID 1000000
++
++#define UPC_PATH 1
++#define UPC_RESV 2
++#define UPC_RESVERR 4
++#define UPC_RESVCONF 8
++#define UPC_PATHTO 16
++#define UPC_PATHTEAR 32
++#define UPC_RESVTO 64
++#define UPC_RESVTEAR 128 
++
++
++struct hdr_rsvp {
++  static int offset_ ;    // offset for this header
++  inline static int& offset() { return offset_ ;}
++  inline static hdr_rsvp *access (const Packet *p) {
++    return (hdr_rsvp*) p->access(offset_) ;
++  }
++  
++  nsaddr_t fromhop;
++};
++
++
++struct tcsb {
++  tcsb() : fl(0), ofl(0), next(0) {};
++  FLOWSPEC *fl; /* The flowspec for the reservation on the iface to sender */
++  FLOWSPEC *ofl; /* The forwarded flowspec on the iface to sender */ 
++  nsaddr_t oifhop;
++  nsaddr_t sender;
++  TclObject *handle;
++  tcsb *next;
++};
++
++
++struct psb {
++  psb() : next(0) {};
++  SENDER_TEMPLATE *sender;
++  SENDER_TSPEC *s_tspec;
++  RSVP_HOP *phop;
++  char ttl;
++  double timeout;
++  int iif;
++  RSVPChecker *check;
++  psb *next;
++};
++
++
++struct rsb {
++  rsb() :  confirm(0), modified(0), is_new(0), processed(0), next(0) {};
++  RSVP_HOP *nhop;
++  FILTER_SPEC *sender;
++  FLOWSPEC *fspec;
++  STYLE *st;
++  RESV_CONFIRM *confirm;
++  psb *p;
++  nsaddr_t oifhop;
++  double timeout;
++  char modified;
++  char is_new;
++  char processed;
++  rsb *old;
++  rsb *next;
++};
++
++
++struct session {
++  session() : path_ref(-1), resv_ref(-1), psb_list(0), rsb_list(0),
++	      tcsb_list(0), next(0), t_next(0), ref_flag(0), confirm(0) {};
++  ~session() { delete s; delete path_tv; delete resv_tv; }
++  SESSION *s;
++  long sid;
++  int status;
++  char handle[8];
++  TIME_VALUES *path_tv;
++  TIME_VALUES *resv_tv;
++  double path_ref;  // The time at which the path state is refreshed
++  double resv_ref;  // The time at which the resv state is refreshed
++  psb *psb_list;
++  rsb *rsb_list;
++  tcsb *tcsb_list;
++  session *next;    // The next session in the session list
++  session *t_next;  // The next session in the timer list
++  char ref_flag;    // Has this session been scheduled for a refresh?
++  char local;       // Did this session originate from a local API call?
++  char confirm;     // Will a RESV_CONFIRM object be sent with the next Resv?
++};
++
++
++class RSVPAgent : public Agent {
++ public:
++  RSVPAgent();
++  int command(int argc, const char*const* argv);
++  void recv(Packet* p, Handler* h);
++  void give(Packet *p, RSVPChecker *ret);
++ protected: 
++  int new_session_sid(nsaddr_t dst, int fid, char local);
++  session *new_session_p(nsaddr_t dst, int fid, char local);
++  void new_psb(session *s, double rate, long bucket, char ttl,
++	       nsaddr_t sender, nsaddr_t phop, double refresh, 
++	       int iface, RSVPChecker *check);
++  rsb *new_rsb(session *s, psb *p, nsaddr_t sender, FLOWSPEC *fl,
++	       const char *style, nsaddr_t nhop, double refresh,
++	       nsaddr_t fromhop);
++  void update_psb(session *s, psb *p, double rate, long bucket, char ttl,
++		  nsaddr_t sender, nsaddr_t phop, double refresh, 
++		  int iface, RSVPChecker *check);
++  void update_rsb(session *s, rsb *r, psb *p, nsaddr_t sender, FLOWSPEC *fl,
++		  const char *style, nsaddr_t nhop, double refresh,
++		  nsaddr_t fromhop);
++  void refresh_path(session *s);
++  void refresh_resv(session *s, char forced);
++  void clear_rsb(rsb *r);
++  void clear_psb(psb *p);
++  void delete_rsbs(session *s, psb *p);
++  void refresh();
++  char check_path(session *s);
++  char check_resv(session *s);
++  char is_leaf(nsaddr_t src, nsaddr_t dst);
++  inline char is_mcast(nsaddr_t addr) 
++    { return ((unsigned int) addr >=
++	      (unsigned int) 1 << Address::instance().McastShift_); };
++  void list_sessions(char *buf, int size);
++  double minref(session *s);
++  void reschedule_session(session *s);
++  void release_session(session *s);
++  void remove_session(session *s);
++  void send_path_message(session *s, psb *p);
++  void send_path_tear_message(session *s, psb *p);
++  int send_resv_message(session *s, rsb *r, char forced);
++  void send_resv_conf_message(session *s, rsb *r);
++  void send_resv_err_message(RSVPmessage *resvmsg, int code);
++  void send_resv_err_message(session *s, RSVPmessage *resvmsg, rsb *r);
++  void send_resv_err_message(session *s, rsb *r);
++  void send_resv_tear_messages(session *s, rsb *r_list);
++  int update_traffic_control(session *s, rsb *r);
++  void process_ff_request(session *s, int argc,	const char*const* argv );
++  void process_path_message(RSVPmessage *msg, int iface, RSVPChecker *check);
++  void process_path_tear_message(RSVPmessage *msg, int iface, 
++				 RSVPChecker *check);
++  void process_resv_conf_message(RSVPmessage *msg);
++  void process_resv_err_message(RSVPmessage *msg);
++  void process_resv_message(RSVPmessage *msg, nsaddr_t fromhop);
++  void process_resv_tear_message(RSVPmessage *msg);
++  psb *find_psb(session *s, nsaddr_t sender);
++  rsb *find_rsb(session *s, nsaddr_t sender, nsaddr_t nhop);
++  int find_rsb_for_psb(session *s, psb *p);
++  session *find_session_sid(long sid);
++  session *find_session_dst(nsaddr_t dst, int fid);
++  char in_range(double x, double y);
++  //int off_rsvp_;
++  int noisy_;    /* Turn output from the RSVP agent on/off */
++  double refresh_;  /* The default refresh value */
++  int lifetime_factor_; /* The factor "K" as described in RFC 2205 */
++  long next_sid_; /* The local session ID for the session */
++  int ip6_;     /* Should IPv6 message lengths be simulated? */
++  int nam_;     /* Should the correct RSVP message names appear in nam? */
++  session *s_list_; /* The session list */
++  session *t_list_; /* The timer list */
++  int num_flows_;
++  int num_psb_;
++  int num_rsb_;
++};
++
++#endif
+diff -urN ns-2.27/rsvp/wfq.cc ns-2.27-rsvp/rsvp/wfq.cc
+--- ns-2.27/rsvp/wfq.cc	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/wfq.cc	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,553 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++#include "wfq.h"
++
++
++static class WFQClassCl : public TclClass {
++public:
++  WFQClassCl() : TclClass("WFQClass") {}
++  TclObject* create(int, const char*const*) {
++    return (new WFQClass);
++  }
++} class_WFQClass;
++
++
++WFQClass::WFQClass() : next_(0), bw_(0), next_time_(-1), last_time_(-1) {
++  //bind("off_cmn_", &off_cmn_);
++  bind("limit_", &qlim_);
++  bind_bw("bw_", &bw_);
++  q_ = new PacketQueue;
++  size_ = 0;
++}
++
++
++/* Inserts a packet into the queue associated with the WFQClass and
++   calculates the new size (in bytes). */
++void WFQClass::enque(Packet *p) {
++  //hdr_cmn *hdr = (hdr_cmn*)p->access(off_cmn_);
++  hdr_cmn *hdr = hdr_cmn::access(p) ;
++  q_->enque(p);
++  size_ += hdr->size();
++}
++
++
++/* Removes a packet from the queue associated with the WFQClass
++   and calculates the new size (in bytes). */
++Packet *WFQClass::deque() {
++  Packet *p = q_->deque();
++  //hdr_cmn *hdr = (hdr_cmn*)p->access(off_cmn_);
++  hdr_cmn *hdr = hdr_cmn::access(p) ;
++  size_ -= hdr->size();
++  return p;
++}
++
++
++/*
++ * The function 'calculate_next_time()' is the 'heart' both of the
++ * WFQ and WF2Q algorithms. It calculates the time at which the next
++ * packet for the queue would complete service in the corresponding
++ * GPS system.
++ */
++void WFQClass::calculate_next_time() {
++  Packet *np = q_->head();
++  //hdr_cmn *hdr = (hdr_cmn*)np->access(off_cmn_);
++  hdr_cmn *hdr = hdr_cmn::access(np) ;
++  last_time_ = next_time_;
++  /* For packet i that arrives in a queue, the completion time 
++   * c_time(i) is:
++   * c_time(i) = max {(time() + size(i)/rate) ; (c_time(i-1) + size(i)/rate)}
++   * Note that the size of a packet is measured in bytes while the bandwidth
++   * is measured in bits per second, hence the 'size()*8' calculation in
++   * the formula below.
++   */
++  if (Scheduler::instance().clock() > next_time_) {
++    next_time_ = Scheduler::instance().clock() + hdr->size()*8 / bw_; } 
++  else {
++    next_time_ = next_time_ + hdr->size()*8 / bw_;
++  }
++}
++
++
++/* 
++ * There are no commands for the class WFQClass yet. This might
++ * change later.
++ */
++int WFQClass::command(int argc, const char*const* argv) {
++  return (Queue::command(argc, argv));
++}
++
++
++static class WFQCl : public TclClass {
++public:
++  WFQCl() : TclClass("Queue/WFQ") {}
++  TclObject* create(int, const char*const*) {
++    return (new WFQ);
++  }
++} class_WFQ;
++
++
++WFQ::WFQ() : queue_list_(0) {
++  // int i; - unused
++  //bind("off_ip_", &off_ip_);
++  //bind("off_cmn_", &off_cmn_);
++  bind_bool("wf2q_", &wf2q_);
++  bind_bool("best_effort_", &best_effort_);
++  bind_bool("borrow_", &borrow_);
++  bind_bool("prio_", &prio_);
++  bind("num_classes_", &num_classes_);
++  bind("num_flows_", &num_flows_);
++  bind("num_drops_", &num_drops_);
++  bind("size_drops_", &size_drops_);
++  hash = new Hashtable(HASHBUCKETS);
++}
++ 
++
++/* 
++ * New classes can be added to (or removed from) a WFQ link with
++ * 'add WFQClass' (or 'remove WFQClass'). Flows can be assigned to
++ * a class (or the assignment can be deleted) with 'bind WFQClass <flowid>'
++ * (or 'unbind <flowid>').
++ */
++int WFQ::command(int argc, const char*const* argv) {
++  Tcl& tcl = Tcl::instance();
++  if (argc == 3) {
++    // add WFQClass
++    if (strcmp(argv[1], "add") == 0) {
++      WFQClass *cl = (WFQClass*)TclObject::lookup(argv[2]);
++      if (cl == NULL) {
++	tcl.resultf("WFQ: no class object %s", argv[2]);
++	return (TCL_ERROR);
++      }
++      insert(cl);
++      num_classes_++;
++      return (TCL_OK);
++    }
++    // remove WFQClass
++    if (strcmp(argv[1], "remove") == 0) {
++      WFQClass *cl = (WFQClass*)TclObject::lookup(argv[2]);
++      if (cl == NULL) {
++	tcl.resultf("WFQ: no class object %s", argv[2]);
++	return (TCL_ERROR);
++      }
++      WFQClass *search = queue_list_;
++      if (queue_list_ == NULL) {
++	tcl.resultf("WFQ: no class object %s found in WFQ link", argv[2]);
++	return (TCL_ERROR);
++      }
++      if (queue_list_ == cl) {
++	queue_list_ = queue_list_->next_;
++      } else {
++	while ((search->next_ != NULL) && (search->next_ != cl)) {
++	  search = search->next_;
++	}
++	if (search->next_ == NULL) {
++	  tcl.resultf("WFQ: no class object %s found in WFQ link", argv[2]);
++	  return (TCL_ERROR);
++	}
++	search->next_ = search->next_->next_;
++      }
++      num_classes_--;
++      return (TCL_OK);
++    }
++    // getclass <flowid>
++    if (strcmp(argv[1], "getclass") == 0) {
++      WFQClass *cl;
++      int fid = atoi(argv[2]);
++      if ((cl = (WFQClass *)hash->lookup(fid)) == NULL) {
++	tcl.resultf("");
++      } else {
++	tcl.resultf("%s", cl->name());
++      }
++      return (TCL_OK);
++    }
++  }
++  if ((argc == 4) || (argc == 5)) {
++    // bind WFQClass <priority>   or   bind WFQClass <src id> <flowid>
++    if (strcmp(argv[1], "bind") == 0) {
++      WFQClass *cl = (WFQClass*)TclObject::lookup(argv[2]);
++      if (cl == NULL) {
++	tcl.resultf("WFQ: no class object %s", argv[2]);
++	return (TCL_ERROR);
++      }
++      WFQClass *search = queue_list_;
++      while ((search != NULL) && (search != cl)) {
++	search = search->next_;
++      }
++      if (search == NULL) {
++	tcl.resultf("WFQ: no class object %s found in WFQ link", argv[2]);
++	return (TCL_ERROR);
++      }
++      int fid = -1;
++      if ((prio_) && (argc == 4)) {  
++	fid = atoi(argv[3]);
++      }
++      if ((!prio_) && (argc == 5)) {
++	fid = (atoi(argv[3]) + 1) * FLOWNUM + atoi(argv[4]);
++      }
++      if (fid == -1) {
++	tcl.resultf("WFQ: Wrong number of arguments for bind");
++	return (TCL_ERROR);
++      }
++      hash->insert(cl, fid);
++      num_flows_++;
++      return(TCL_OK);
++    }
++  }
++  if ((argc == 3) || (argc == 4)) {
++    // unbind <flowid>   or   unbind <src id> <flowid>
++    if (strcmp(argv[1], "unbind") == 0) {
++      int fid = -1;
++      if ((prio_) && (argc == 3)) {  
++	fid = atoi(argv[2]);
++      }
++      if ((!prio_) && (argc == 4)) {
++	fid = (atoi(argv[2]) + 1) * FLOWNUM + atoi(argv[3]);
++      }
++      if (fid == -1) {
++	tcl.resultf("WFQ: Wrong number of arguments for unbind");
++	return (TCL_ERROR);
++      }
++      if (hash->lookup(fid) == NULL) {
++	tcl.resultf("%s WFQ: No class assigned to flow %d", name(), fid);
++	return (TCL_ERROR);
++      }
++      hash->remove(fid);
++      num_flows_--;
++      return(TCL_OK);
++    }
++  }
++  return (Queue::command(argc, argv));
++}
++
++
++int WFQ::length() {
++  WFQClass *s = queue_list_;
++  int l;
++  l = 0;
++  while (s != NULL) {
++    l += s->length();
++    s = s->next_;
++  }
++  return l;
++}
++
++
++void WFQ::enque(Packet* p)
++{
++  int num;
++  WFQClass *cl; // , *next; - next is unused
++  int be;
++  Tcl& tcl = Tcl::instance();
++  // hdr_ip *hdr = (hdr_ip*)p->access(off_ip_);
++  hdr_ip *hdr = hdr_ip::access(p) ;
++  // Check if a class has been assigned to this flow/priority:
++  if (prio_) {
++    num = hdr->prio();
++    cl = (WFQClass *)hash->lookup(num);
++    if ((be = (cl == NULL))) {
++      if (best_effort_) {
++	cl = (WFQClass *)hash->lookup(0);
++      } else {
++	tcl.evalf("%s WFQ: unknown priority %u",name(), num);
++      }
++    }
++  } else {
++    // num = ((hdr->src() >> Address::instance().NodeShift_[1]) + 1) * FLOWNUM +
++    num = ( hdr->saddr() + 1 ) * FLOWNUM + // SM
++      hdr->flowid();
++    cl = (WFQClass *)hash->lookup(num);
++    if (cl == NULL) {
++      num = hdr->flowid();
++      cl = (WFQClass *)hash->lookup(num);
++    }
++    if ((be = (cl == NULL))) {
++      if (best_effort_) {
++	cl = (WFQClass *)hash->lookup(0);
++      } else {
++	tcl.evalf("%s WFQ: unknown flow %u",name(), num);
++      }
++    }
++  }
++  /* Is the queue full? Drop the packet, or if best effort and borrow 
++     mode is enabled and it is not already in the best-effort class, 
++     try to insert it into the best-effort class. */
++  //hdr_cmn *hdrc = (hdr_cmn*)p->access(off_cmn_);
++  hdr_cmn *hdrc = hdr_cmn::access(p) ;
++  if (cl->length() + hdrc->size() > cl->limit()) {
++    if (best_effort_ && borrow_ && (num > 0)) {
++      cl = (WFQClass*)hash->lookup(0);
++      if (cl->length() + hdrc->size() > cl->limit()) {
++	drop(p);
++	if (!be) {
++	  num_drops_++;
++	  size_drops_ += hdrc->size();
++	}
++      } else {
++	cl->enque(p);
++	// Check if the queue was empty. In that case, calculate
++	// the GPS completion time for the new packet.
++	if (cl->get_next_time() == -1) {
++	  cl->calculate_next_time();
++	}
++	// Sort the queue list
++	reinsert(cl);
++      }
++    } else {
++      drop(p);
++      if ((!be) && (num > 0)) {
++  	num_drops_++;
++	size_drops_ += hdrc->size();
++      }
++    }
++  } else {
++    cl->enque(p);
++    // Check if the queue was empty. In that case, calculate
++    // the GPS completion time for the new packet.
++    if (cl->get_next_time() == -1) {
++      cl->calculate_next_time();
++    }
++    // Sort the queue list
++    reinsert(cl);
++  }
++}
++
++
++int WFQ::greater(double t1, double t2) {
++  if (t2 == -1) return 0;
++  if (t1 == -1) return 1;
++  if (t1 > t2) return 1;
++  return 0;
++}
++
++
++/*
++ * The function 'WFQ::insert()' inserts a WFQClass into the sorted
++ * queue list
++ */
++void WFQ::insert(WFQClass *element) {
++ if ((queue_list_ == NULL) || 
++     greater(queue_list_->get_next_time(), element->get_next_time())) {
++    element->next_ = queue_list_;
++    queue_list_ = element;
++  } else {
++    WFQClass *search = queue_list_;
++    WFQClass *next = search->next_;
++    while ((next != NULL) && 
++	   greater(element->get_next_time(), next->get_next_time())) {
++      search = search->next_;
++      next = next->next_;
++    }
++    search->next_ = element;
++    element->next_ = next;
++  }
++}
++
++
++/*
++ * The function 'WFQ::reinsert' removes an element for the sorted
++ * queue list, then inserts it in the right place with the 'WFQ::insert()'
++ * function.
++ */
++void WFQ::reinsert(WFQClass *element) {
++  WFQClass *search;
++  if (queue_list_ == element) {
++    queue_list_ = queue_list_->next_;
++    insert(element);
++  } else {
++    search = queue_list_;
++    while (search->next_ != element) {
++      search = search->next_;
++    }
++    search->next_ = element->next_;
++    insert(element);
++  }
++}
++
++
++/*
++ * The function 'WFQ::deque()' has to decide which queue is to be
++ * served next. In the original WFQ algorithm, this is always the queue
++ * with the lowest completion time for the next packet. In WF2Q, it is
++ * the queue with the lowest completion time of all queues that would
++ * already be served in the GPS system (or if no queues would be served
++ * at the moment, the queue with the lowest completion time is chosen).
++ */
++Packet* WFQ::deque()
++{
++  Packet *p; //, *np; - np is unused
++  // Are we using the WFQ or the WF2Q algorithm?
++  if (wf2q_ == 0) {
++    // ***** WFQ *****
++    WFQClass *head;
++    // Are there any packets in the queue?
++    if ((queue_list_ == NULL) || (queue_list_->get_next_time() == -1)) {
++      return NULL;
++    }
++    // Take the next packet from the first queue in the list
++    p = queue_list_->deque();
++    // Determine the next completion time: Either -1 if the queue is
++    // empty now, or the result of the 'calculate_next_time' function.
++    // Then insert the queue in the right place in the sorted queue list.
++    if (queue_list_->length() == 0) {
++      queue_list_->set_next_time(-1);
++      if ((queue_list_->next_ != NULL) && 
++	  (queue_list_->next_->get_next_time() != -1)) {
++	head = queue_list_;
++	queue_list_ = queue_list_->next_;
++	insert(head);
++      }
++    } else {
++      queue_list_->calculate_next_time();
++      if ((queue_list_->next_ != NULL) && 
++	  (queue_list_->next_->get_next_time() != -1) &&
++	  (queue_list_->next_->get_next_time() < queue_list_->get_next_time())) {
++	head = queue_list_;
++	queue_list_ = queue_list_->next_;
++	insert(head);
++      }
++    }
++    return p;
++  } else {
++    // ***** WF2Q *****
++    WFQClass *search, *element;
++    // Are there any packets in the queue?
++    if ((queue_list_ == NULL) || (queue_list_->get_next_time() == -1)) {
++      return NULL;
++    }
++    // Has the first queue in the list already started service in the 
++    // GPS system?
++    if (Scheduler::instance().clock() > queue_list_->get_last_time()) {
++      element = queue_list_;
++      queue_list_ = queue_list_->next_;
++    } else {
++      // If not, search for the first queue in the list which has
++      // started service in the GPS system
++      search = queue_list_;
++      while ((search->next_ != NULL) && 
++	     (Scheduler::instance().clock() <= search->next_->get_last_time()) &&
++	     (search->next_->get_next_time() != -1)) {
++	search = search->next_;
++      }
++      // If none is found, simply choose the first queue.
++      if ((search->next_ == NULL) || (search->next_->get_next_time() == -1)) {
++	element = queue_list_;
++	queue_list_ = queue_list_->next_;
++      } else {
++	element = search->next_;
++	search->next_ = search->next_->next_;
++      }
++    }
++    // Take the first packet from the queue, recalculate the completion
++    // time (either -1 if the queue is empty now, or the result of the
++    // 'calculate_next_time()' function), then insert the element into
++    // the right place in the sorted queue list.
++    p = element->deque();
++    if (element->length() == 0) {
++      element->set_last_time(-1);
++      element->set_next_time(-1);
++    } else {
++      element->calculate_next_time();
++    }
++    insert(element);      
++    return p;
++  }
++}
++
++
++Hashtable::Hashtable(int buckets) {
++  buckets_ = buckets;
++  table_ = new (node *)[buckets];
++  int i;
++  for (i = 0; i < buckets; i++) {
++    table_[i] = NULL;
++  }
++}
++
++
++void Hashtable::insert(TclObject *obj, int value) {
++  if (lookup(value) == NULL) {
++    int bucket = value % buckets_;
++    node *n, *s;
++    n = new node;
++    n->obj = obj;
++    n->value = value;
++    n->next = NULL;
++    if (table_[bucket] == NULL) {
++      table_[bucket] = n;
++    } else {
++      if (value < table_[bucket]->value) {
++	n->next = table_[bucket];
++	table_[bucket] = n;
++      } else {
++	s = table_[bucket];
++	/* The elements are sorted in ascending order. Since it can be assumed
++	   that lookups will occur much more often than inserts, this can
++	   increase the performance considerably. */
++	while ((s->next != NULL) && (s->next->value < value)) {
++	  s = s->next;
++	}
++	n->next = s->next;
++	s->next = n;
++      }
++    }
++  }
++}
++
++
++void Hashtable::remove(int value) {
++  int bucket = value % buckets_;
++  node *temp;
++  node *s = table_[bucket];
++  if (s != NULL) {
++    if (s->value == value) {
++      table_[bucket] = s->next;
++      delete s;
++    } else {
++      while ((s->next != NULL) && (s->next->value < value)) {
++	s = s->next;
++      }
++      if ((s->next != NULL) && (s->next->value == value)) {
++	temp = s->next;
++	s->next = temp->next;
++	delete temp;
++      }
++    }
++  }
++}
++
++
++
++TclObject *Hashtable::lookup(int value) {
++  int bucket = value % buckets_;
++  node *s = table_[bucket];
++  while ((s != NULL) && (s->value != value)) {
++    s = s->next;
++  }
++  if (s != NULL) {
++    return s->obj;
++  } else {
++    return NULL;
++  }
++}
++
++
+diff -urN ns-2.27/rsvp/wfq.h ns-2.27-rsvp/rsvp/wfq.h
+--- ns-2.27/rsvp/wfq.h	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/rsvp/wfq.h	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,141 @@
++/*
++ * Copyright (c) 1998 The University of Bonn
++ * All rights reserved.
++ * 
++ * Permission to use and copy this software in source and binary forms
++ * is hereby granted, provided that the above copyright notice, this
++ * paragraph and the following disclaimer are retained in any copies
++ * of any part of this software and that the University of Bonn is
++ * acknowledged in all documentation pertaining to any such copy
++ * or derivative work. The name of the University of Bonn may not
++ * be used to endorse or promote products derived from this software
++ * without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++ * EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++ * THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++ * OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++ * SOFTWARE.
++ */
++
++#ifndef ns_wfq_h
++#define ns_wfq_h
++
++#include "queue.h"
++#include "address.h"
++#include "ip.h"
++
++
++/* The number of hashbuckets for the classifier should be adapted to
++   the actual simulation scenarios. */
++#define HASHBUCKETS 19
++/* A maximum of 1,000,000 flows should be enough even for the largest
++   scenarios. */
++#define FLOWNUM 10000000
++
++
++/* 
++ * WFQClass is used to define the bandwidth that a flow receives.
++ * The user can set the parameters 'bw_' and 'limit_' to specify the
++ * bandwidth and the queue size (for the queue 'q_') for the flows that 
++ * are assigned to this class.
++ */
++class WFQClass : public Queue {
++ public:
++  WFQClass();
++  int command(int argc, const char*const* argv);
++  inline double get_bw() { return bw_; }
++  inline double get_next_time() { return next_time_; }
++  inline double get_last_time() { return last_time_; }  
++  inline void set_next_time(double time) { next_time_ = time; }
++  inline void set_last_time(double time) { last_time_ = time; }
++  inline int length() { return size_; }
++  inline int limit() { return qlim_; }
++  inline void set_limit(int limit) { qlim_ = limit; }
++  inline void set_bw(double bw) { bw_ = bw; }
++  void enque(Packet *p);
++  Packet *deque();
++  inline Packet *head() { return q_->head(); }
++  void calculate_next_time();
++  WFQClass *next_;
++ protected:
++  PacketQueue *q_;
++  double bw_;
++  double next_time_;
++  double last_time_;
++  //int off_cmn_;
++  int qlim_;
++  int size_;
++};
++
++
++/* It was necessary to write a hash table class for WFQ. Otherwise, the
++   HashClassifier in ns would have to be used, but that would slow the
++   simulation down considerably, because one call to Tcl would be 
++   necessary for each lookup, since the lookup functions in the 
++   HashClassifier can only be called from Tcl. Depending on the flows 
++   and links in the simulation, that could mean a few thousand calls
++   to Tcl per link per simulated second. This Hashtable does not perform
++   any sanity checks (like trying to insert the same value twice) since
++   it can be assumed that the Hashtable is not going to be used directly
++   by a user in simulation scenarios, but only by other classes in ns which
++   will perform these checks themselves. */
++class Hashtable {
++ public:
++  Hashtable(int buckets);
++  int add(TclObject *obj);
++  void insert(TclObject *obj, int value);
++  void remove(int value);
++  TclObject *lookup(int value);
++ protected:
++  struct node {
++    int value;
++    TclObject *obj;
++    node *next;
++  };
++  node **table_;
++  int buckets_;
++};
++
++
++class WFQ : public Queue {
++ public:
++  WFQ();
++  int length();
++  int command(int argc, const char*const* argv);
++protected:
++  int greater(double t1, double t2);
++  void enque(Packet*);
++  void insert(WFQClass *element);
++  void reinsert(WFQClass *element);
++  Packet* deque();
++  WFQClass *queue_list_;
++  //int off_ip_;
++  //int off_cmn_;
++  int num_classes_;  /* The number of WFQ classes in the link. */
++  int num_flows_;    /* The number of flows bound to the WFQ classes. */
++  int num_drops_;  /* The number of dropped non-best-effort packets */
++  int size_drops_; /* The sum of the sizes of the num_drops_ packets */
++  int wf2q_;
++  /* Should packets from unknown flows be mapped to the best effort
++     class 0? */
++  int best_effort_; 
++  /* Are non-best-effort classes able to 'borrow' bandwidth from the
++     best-effort class? */
++  int borrow_;
++  /* Are packets classified by their src id and flow id or by their
++     priority field? */
++  int prio_;
++  /* A hash classifier is used to determine which class a packet
++     belongs to. It might make sense to have separate classifiers for 
++     src/fid classifying and for priority classifying to allow for
++     switching between these two modes during simulation runtime, but
++     that would be a waste of memory and will not be done unless it
++     becomes necessary later.*/
++  Hashtable *hash;
++};
++
++
++#endif
+diff -urN ns-2.27/tcl/ex/rsvp/rsvp_conf.tcl ns-2.27-rsvp/tcl/ex/rsvp/rsvp_conf.tcl
+--- ns-2.27/tcl/ex/rsvp/rsvp_conf.tcl	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/tcl/ex/rsvp/rsvp_conf.tcl	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,114 @@
++#
++# Copyright (c) 1998 The University of Bonn
++# All rights reserved.
++# 
++# Permission to use and copy this software in source and binary forms
++# is hereby granted, provided that the above copyright notice, this
++# paragraph and the following disclaimer are retained in any copies
++# of any part of this software and that the University of Bonn is
++# acknowledged in all documentation pertaining to any such copy
++# or derivative work. The name of the University of Bonn may not
++# be used to endorse or promote products derived from this software
++# without specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++# EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++# THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++# WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++# OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++# SOFTWARE.
++#
++
++# A simulation scenario which illustrates the possible problems 
++# with confirmation messages. For a detailed description, see:
++# http://titan.cs.uni-bonn.de/~greis/rsvpns/rsvpns.ps
++
++set ns [new Simulator -multicast on]
++
++$ns color 46 purple
++
++#Simulator set EnableMcast_ 1
++#Simulator set NumberInterfaces_ 1
++
++set n0 [$ns node]
++set n1 [$ns node]
++set n2 [$ns node]
++set n3 [$ns node]
++
++set nf [open out.nam w]
++$ns namtrace-all $nf
++
++$ns duplex-rsvp-link $n0 $n1 1Mb 1s 0.3 50 5000 Param Null
++$ns duplex-rsvp-link $n1 $n2 1Mb 1s 0.5 50 5000 Param Null
++$ns duplex-rsvp-link $n1 $n3 1Mb 1s 0.5 50 5000 Param Null
++
++DM set PruneTimeout 60.0
++set mproto DM
++set mrthandle [$ns mrtproto $mproto {}]
++
++Agent/RSVP set noisy_ 255
++
++set rsvp3 [$n3 add-rsvp-agent]
++set rsvp2 [$n2 add-rsvp-agent]
++set rsvp1 [$n1 add-rsvp-agent]
++set rsvp0 [$n0 add-rsvp-agent]
++
++# Enable all upcalls on node 3:
++#$rsvp3 set noisy_ 255
++
++# obtain a multicast address
++set group [Node allocaddr]
++#puts "group = $group"
++
++set sid [$rsvp0 session $group 10]
++
++# Have node 2 and 3 join the multicast group
++$ns at 1.0 "$n2 join-group $rsvp2 $group"
++$ns at 1.0 "$n3 join-group $rsvp3 $group"
++
++# Send path messages from node 0
++# note that the sid only has local significance - this works because
++# only 1 session is defined and it has sid of 0 at all of the nodes.
++$ns at 2.0 "$rsvp0 sender 0 +500000 5000 32"
++# Send reservation messages first from node 2
++$ns at 5.0 "$rsvp2 reserve 0 FF +500000 5000 0"
++# Request a confirmation for the next reservation from node 3
++$ns at 5.5 "$rsvp3 confirm 0"
++# Send reservation messages from node 3
++$ns at 5.7 "$rsvp3 reserve 0 FF +500000 5000 0"
++
++#$ns at 1.0 "print-sessions"
++#$ns at 2.0 "print-sessions"
++#$ns at 3.0 "print-sessions"
++#$ns at 4.0 "print-sessions"
++#$ns at 5.0 "print-sessions"
++#$ns at 6.0 "print-sessions"
++#$ns at 7.0 "print-sessions"
++#$ns at 8.0 "print-sessions"
++#$ns at 9.0 "print-sessions"
++#$ns at 10.0 "print-sessions"
++#$ns at 11.0 "print-sessions"
++#$ns at 12.0 "print-sessions"
++#$ns at 13.0 "print-sessions"
++#$ns at 14.0 "print-sessions"
++#$ns at 15.0 "print-sessions"
++
++$ns at 15.0 "finish"
++
++proc print-sessions {} {
++    global rsvp0 ns
++    set sessions [$rsvp0 sessions]
++    set now [$ns now]
++    puts "time = $now: sessions - $sessions"
++}
++
++proc finish {} {
++	global nf ns
++        $ns flush-trace
++        close $nf
++	puts "Done."
++        exit 0
++}
++
++$ns run
+diff -urN ns-2.27/tcl/ex/rsvp/rsvp_distinct.tcl ns-2.27-rsvp/tcl/ex/rsvp/rsvp_distinct.tcl
+--- ns-2.27/tcl/ex/rsvp/rsvp_distinct.tcl	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/tcl/ex/rsvp/rsvp_distinct.tcl	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,174 @@
++#
++# Copyright (c) 1998 The University of Bonn
++# All rights reserved.
++# 
++# Permission to use and copy this software in source and binary forms
++# is hereby granted, provided that the above copyright notice, this
++# paragraph and the following disclaimer are retained in any copies
++# of any part of this software and that the University of Bonn is
++# acknowledged in all documentation pertaining to any such copy
++# or derivative work. The name of the University of Bonn may not
++# be used to endorse or promote products derived from this software
++# without specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++# EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++# THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++# WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++# OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++# SOFTWARE.
++#
++
++# A simulation scenario which demonstrates distinct reservations for
++# the same session (i.e. reservations for different senders for the
++# same session which are added up). For a detailed description, see
++# 'http://titan.cs.uni-bonn.de/~greis/rsvpns/rsvpns.ps'.
++
++$defaultRNG seed 1
++
++set ns [new Simulator]
++
++$ns color 0 red
++$ns color 1 blue
++$ns color 2 green
++$ns color 46 purple
++
++set f0 [open out0.tr w]
++set f1 [open out1.tr w]
++set f2 [open out2.tr w]
++
++set n0 [$ns node]
++set n1 [$ns node]
++set n2 [$ns node]
++set n3 [$ns node]
++set n4 [$ns node]
++
++# Keep nam trace generation off for now
++set nf [open /tmp/out.nam w]
++#$ns namtrace-all $nf
++
++$ns duplex-rsvp-link $n0 $n1 1Mb 1s 0.5 200 5000 Param Null
++$ns duplex-rsvp-link $n1 $n2 1Mb 1s 0.5 200 5000 Param Null
++$ns duplex-rsvp-link $n1 $n3 1Mb 1s 0.5 200 5000 Param Null
++$ns duplex-rsvp-link $n1 $n4 1Mb 1s 0.5 200 5000 Param Null
++
++# Enable upcalls on all nodes
++Agent/RSVP set noisy_ 255
++
++set rsvp4 [$n4 add-rsvp-agent]
++set rsvp3 [$n3 add-rsvp-agent]
++set rsvp2 [$n2 add-rsvp-agent]
++set rsvp1 [$n1 add-rsvp-agent]
++set rsvp0 [$n0 add-rsvp-agent]
++
++# Create three traffic sources
++# set cbr2 [new Agent/CBR]
++set udp2 [new Agent/UDP]
++$ns attach-agent $n2 $udp2
++$udp2 set packetSize_ 500
++$udp2 set fid_ 1
++set cbr2 [new Application/Traffic/CBR]
++#$cbr2 set interval_ 0.008
++$cbr2 set rate_ 500k
++$cbr2 set random_ 1
++$cbr2 set packetSize_ 500
++$cbr2 attach-agent $udp2
++
++# set cbr3 [new Agent/CBR]
++set udp3 [new Agent/UDP]
++$ns attach-agent $n3 $udp3
++$udp3 set packetSize_ 500
++$udp3 set fid_ 1
++set cbr3 [new Application/Traffic/CBR]
++#$cbr3 set interval_ 0.008
++$cbr3 set rate_ 500k
++$cbr3 set random_ 1
++$cbr3 set packetSize_ 500
++$cbr3 attach-agent $udp3
++
++# set cbr4 [new Agent/CBR]
++set udp4 [new Agent/UDP]
++$ns attach-agent $n4 $udp4
++$udp4 set packetSize_ 500
++$udp4 set fid_ 1
++set cbr4 [new Application/Traffic/CBR]
++$cbr4 set packetSize_ 500
++#$cbr4 set interval_ 0.008
++$cbr4 set rate_ 500k
++$cbr4 set random_ 1
++$cbr4 attach-agent $udp4
++
++# Create three traffic sinks
++set sink2 [new Agent/LossMonitor]
++$ns attach-agent $n0 $sink2
++
++set sink3 [new Agent/LossMonitor]
++$ns attach-agent $n0 $sink3
++
++set sink4 [new Agent/LossMonitor]
++$ns attach-agent $n0 $sink4
++
++$ns connect $udp2 $sink2
++$ns connect $udp3 $sink3
++$ns connect $udp4 $sink4
++
++# Create the same session on all sender nodes
++$rsvp2 session $n0 1
++$rsvp3 session $n0 1
++$rsvp4 session $n0 1
++
++set counter 0
++# Start the procedure which logs the rate for the incoming flow on node 0
++$ns at 0.0 "record"
++
++$ns at 1.0 "$rsvp2 sender 0 +500000 5000 32"
++$ns at 3.0 "$rsvp3 sender 0 +500000 5000 32"
++$ns at 5.0 "$rsvp4 sender 0 +500000 5000 32"
++# Perform test reservations
++$ns at 300.0 "$rsvp0 reserve 0 ff +100000 100000 $n2"
++$ns at 600.0 "$rsvp0 reserve 0 ff +500000 100000 $n3"
++$ns at 900.0 "$rsvp0 reserve 0 ff +400000 100000 $n3"
++$ns at 1200.0 "$rsvp0 reserve 0 ff +100000 100000 $n3"
++$ns at 1500.0 "$rsvp0 reserve 0 ff +300000 100000 $n4"
++
++$ns at 10.0 "$cbr2 start"
++$ns at 2000.0 "$cbr2 stop"
++$ns at 10.0 "$cbr3 start"
++$ns at 2000.0 "$cbr3 stop"
++$ns at 10.0 "$cbr4 start"
++$ns at 2000.0 "$cbr4 stop"
++
++$ns at 2100.0 "finish"
++
++proc record {} {
++	global sink2 sink3 sink4 ns f0 f1 f2 counter
++	set time 10.0
++	set bw0 [$sink2 set bytes_]
++	set bw1 [$sink3 set bytes_]
++        set bw2 [$sink4 set bytes_]
++	set now [$ns now]
++	puts $f0 "$now [expr $bw0/$time*8]"
++	puts $f1 "$now [expr $bw1/$time*8]"
++	puts $f2 "$now [expr $bw2/$time*8]"
++	$sink2 set bytes_ 0
++	$sink3 set bytes_ 0
++	$sink4 set bytes_ 0
++	$ns at [expr $now+$time] "record"
++	if { $counter == 10 } {
++		puts "Time: $now"
++		set counter 0
++	}
++	incr counter
++}
++
++
++proc finish {} {
++        global ns nf
++        $ns flush-trace
++        close $nf
++	puts "Done."
++        exit 0
++}
++
++$ns run
+diff -urN ns-2.27/tcl/ex/rsvp/rsvp_large.tcl ns-2.27-rsvp/tcl/ex/rsvp/rsvp_large.tcl
+--- ns-2.27/tcl/ex/rsvp/rsvp_large.tcl	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/tcl/ex/rsvp/rsvp_large.tcl	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,328 @@
++#
++# Copyright (c) 1998 The University of Bonn
++# All rights reserved.
++# 
++# Permission to use and copy this software in source and binary forms
++# is hereby granted, provided that the above copyright notice, this
++# paragraph and the following disclaimer are retained in any copies
++# of any part of this software and that the University of Bonn is
++# acknowledged in all documentation pertaining to any such copy
++# or derivative work. The name of the University of Bonn may not
++# be used to endorse or promote products derived from this software
++# without specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++# EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++# THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++# WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++# OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++# SOFTWARE.
++#
++
++# An RSVP simulation scenario with 80 nodes and up to 1140 flows. See
++# 'http://titan.cs.uni-bonn.de/~greis/rsvpns/rsvpns.ps' for a detailed
++# description.
++
++set ns [new Simulator]
++
++# Open four log files
++set f0 [open out0.tr w]
++set f1 [open out1.tr w]
++set f2 [open out2.tr w]
++set f3 [open out3.tr w]
++
++Agent/RSVP set noisy_ 0
++
++# Redefine the Path upcall to automatically perform a reservation
++Agent/RSVP instproc upcall-path { sid rate bucket sender } {
++	$self reserve $sid FF $rate $bucket $sender
++}
++
++# Redefine the Resv upcall to start sending a flow for this session
++# as soon as a reservation is established
++Agent/RSVP instproc upcall-resv { sid rate bucket sender } {
++	global [$self get-handle $sid]
++	[$self get-handle $sid] start
++}
++
++
++# The average packet size
++set psize 500
++# The average flow length in seconds
++set flength 200
++# The number of best-effort flows for every end node
++set flownum 15
++# The number of RSVP flows for every end node
++set rsvpnum 4
++# The first flow id
++set fid 1000
++
++set rng [new RNG]
++$rng seed 0
++
++set packetrv [new RandomVariable/Exponential]
++$packetrv set avg_ $psize
++set timerv [new RandomVariable/Exponential]
++$timerv set avg_ $flength
++
++# The class 'Flow' creates a best-effort flow with an expoo 
++# distribution and a peak rate of 64kb/s.
++
++Class Flow
++
++# The init procedure creates the traffic source for the flow and 
++# schedules the stop time.
++Flow instproc init {n1 n2} {
++	eval $self next
++	$self instvar source_ traffic_ node_
++	global packetrv timerv null
++	set ns [Simulator instance]
++	set node_ $n1
++	set source_ [new Agent/UDP]
++	$ns attach-agent $node_ $source_
++	set traffic_ [new Application/Traffic/Exponential]
++	set size [expr int([$packetrv value]) + 1]
++	$traffic_ set packet-size $size
++	$traffic_ set burst-time 1s
++	$traffic_ set idle-time 0.5s
++	$traffic_ set rate 64k	
++	$traffic_ attach-agent $source_
++	$ns connect $source_ $null([$n2 id])
++	$traffic_ start
++	$ns at [expr [$ns now] + [$timerv value]] "$self stop"
++}
++
++
++# The stop procedure stops the flow, schedules the next flow and
++# deletes the Flow object.
++Flow instproc stop {} {
++	$self instvar source_ traffic_ node_
++	global timerv rng n
++	set ns [Simulator instance]
++	$traffic_ stop
++   #$traffic_ detach-agent $source_
++	delete $traffic_
++	$ns detach-agent $node_ $source_
++	delete $source_
++	set next_time [expr [$ns now] + ([$timerv value] / 2)]
++	set tonode [$rng integer 60]
++	while {$tonode == $node_} {
++		set tonode [$rng integer 60]
++	}
++	$ns at $next_time "new Flow $node_ $n($tonode)"
++	delete $self
++}
++
++
++# The class RSVPFlow creates a flow with similar characteristics
++# as the best-effort flows, but with a reservation for its rate.
++# RSVPFlows are sent with a constant bit rate of 64kbit/s.
++Class RSVPFlow
++
++# The init procedure creates an RSVP session for this flow and
++# sends path messages
++RSVPFlow instproc init {n1 n2} {
++	eval $self next
++	$self instvar node_ session_ fid_ dest_
++	set ns [Simulator instance]
++	global fid r
++	set fid_ $fid
++	set node_ $n1
++	set dest_ [$n2 id]
++	incr fid
++	set id [$n1 id]
++	set session_ [$r($id) session $n2 $fid_]
++	$r($id) sender $session_ 64000 5000 10
++	$r($id) set-handle $session_ $self
++}
++
++
++# The start procedure is called by the Resv upcall when a reservation
++# for this flow is in place. It creates a CBR agent and schedules
++# its stop time.
++RSVPFlow instproc start {} {
++	$self instvar node_ source_ traffic_ fid_ dest_
++	global null timerv
++	set ns [Simulator instance]
++	set source_ [new Agent/UDP]
++	$ns attach-agent $node_ $source_
++	set traffic_ [new Application/Traffic/CBR]
++	$traffic_ set packetSize_ 500
++	$traffic_ set interval_ 0.0625
++	$traffic_ set fid_ $fid_
++	$traffic_ attach-agent $source_
++	$ns connect $source_ $null($dest_)
++	$traffic_ start
++	$ns at [expr [$ns now] + [$timerv value]] "$self stop"
++}
++		
++
++# The stop procedure deletes the traffic source and releases the
++# RSVP session, then it schedules the start of the next session before
++# it deletes the RSVPFlow object.
++RSVPFlow instproc stop {} {
++	$self instvar session_ source_ traffic_ node_
++	global timerv r rng n
++	$traffic_ stop
++   #$traffic_ detach-agent $source_
++   delete $traffic_
++	set ns [Simulator instance]
++	$ns detach-agent $node_ $source_
++	delete $source_
++	$r([$node_ id]) release $session_
++        set next_time [expr [$ns now] + ([$timerv value] / 2)]
++        set tonode [$rng integer 60]
++        while {$tonode == $node_} {
++                set tonode [$rng integer 60]
++        }
++        $ns at $next_time "new RSVPFlow $node_ $n($tonode)"
++	delete $self
++}
++
++
++# The class MonFlow does not actually create a flow, it only performs
++# a reservation for the flow sent by the cbr0 agent.
++Class MonFlow
++
++# The init procedure creates a session for the flow and starts sending
++# path messages, then schedules the stop procedure after 100 seconds.
++MonFlow instproc init {} {
++	$self instvar sid_
++	global r n
++	set sid_ [$r(0) session $n(30) 10]
++	$r(0) set-handle $sid_ $self
++	$r(0) sender $sid_ 64000 5000 10
++	set ns [Simulator instance]
++	$ns at [expr [$ns now] + 100] "$self stop"
++}
++
++
++# This is more or less a dummy procedure that is needed since 
++# the resv upcall calls a 'start' function. It is useful to see
++# that the reservation actually succeeded though.
++MonFlow instproc start {} {
++	puts "Reservation accepted at [[Simulator instance] now]"
++}
++
++
++# The stop procedure releases the session and deletes the object.
++MonFlow instproc stop {} {
++	global r
++	$self instvar sid_
++	$r(0) release $sid_
++	puts "Reservation cancelled at [[Simulator instance] now]"
++	delete $self
++}
++
++
++# Set up the topology:
++
++puts "Creating 80 nodes with RSVP agents and traffic sinks"
++for {set i 0} {$i < 80} {incr i} {
++	set n($i) [$ns node]
++	set r($i) [$n($i) add-rsvp-agent]
++	if {$i < 60} {
++		$r($i) set noisy_ 3
++	}
++	set null($i) [new Agent/Null]
++	$ns attach-agent $n($i) $null($i)
++}
++
++puts "Connecting the \"backbone\""
++for {set i 0} {$i < 5} {incr i} {
++	$ns duplex-rsvp-link $n([expr $i + 75]) \
++		$n([expr (($i + 1) % 5) + 75]) 3Mb 10ms 0.99 5000 1000 Param Null
++}
++
++puts "Connecting the \"access nodes\" with the \"backbone\""
++for {set i 0} {$i < 15} {incr i} {
++	$ns duplex-rsvp-link $n([expr $i + 60]) $n([expr ($i / 3) + 75]) \
++		2Mb 10ms 0.99 5000 1000 Param Null
++}
++
++puts "Connecting the \"end nodes\" with the \"access nodes\""
++for {set i 0} {$i < 60} {incr i} {
++	$ns duplex-rsvp-link $n($i) $n([expr ($i / 4) + 60]) \
++		1Mb 10ms 0.99 5000 10000 Param Null
++}
++
++puts "Initializing $flownum flows per end node"
++for {set i 0} {$i < 60} {incr i} {
++	for {set j 0} {$j < $flownum} {incr j} {
++		set tonode [$rng integer 60]
++		while {$tonode == $i} {
++			set tonode [$rng integer 60]
++		}
++		new Flow $n($i) $n($tonode)
++	}
++}
++
++puts "Initializing $rsvpnum RSVP flows per end node"
++for {set i 0} {$i < 60} {incr i} {
++	for {set j 0} {$j < $rsvpnum} {incr j} {
++		set tonode [$rng integer 60]
++		while {$tonode == $i} {
++			set tonode [$rng integer 60]
++		}
++		$ns at [$rng uniform 1 50] \
++			"set ne \[new RSVPFlow $n($i) $n($tonode)\]"
++	}
++}
++
++
++# A simple procedure to log some interesting data. The procedure
++# writes the data into the corresponding files, then schedules itself
++# a second later.
++proc record {} {
++	global ns counter sink0 f0 f1 f2 f3 r monqueue
++	set time 1.0
++        set now [$ns now]
++	set bw [$sink0 set bytes_]
++	# The bandwidth for the 'main flow'
++	puts $f0 "$now [expr $bw/$time*8/1000]"
++	# The number of flows in an arbitrarily chosen backbone node
++	puts $f1 "$now [$r(79) set num_flows_]"
++	# The number of flows in an arbitrarily chosen backbone link
++	puts $f2 "$now [$monqueue set num_flows_]"
++	# The number of dropped packets for reserved flows in that link
++	puts $f3 "$now [$monqueue set num_drops_]"
++	$monqueue clear-stats
++	$sink0 set bytes_ 0
++ 	$ns at [expr $now+$time] "record"
++	puts "Time: $now"
++	incr counter
++}
++
++
++proc finish {} {
++	puts "Done."
++        exit 0
++}
++
++
++set udp0 [new Agent/UDP]
++$ns attach-agent $n(0) $udp0
++set cbr0 [new Application/Traffic/CBR]
++$cbr0 set packetSize_ 100
++$cbr0 set interval_ 0.0125
++$cbr0 set fid_ 10
++$cbr0 attach-agent $udp0
++
++set sink0 [new Agent/LossMonitor]
++$ns attach-agent $n(30) $sink0
++
++$ns connect $udp0 $sink0
++
++set monqueue [[$ns link $n(78) $n(79)] queue]
++
++set counter 0
++
++$ns at 0.0 "record"
++$ns at 0.0 "$cbr0 start"
++$ns at 300 "new MonFlow"
++$ns at 500 "new MonFlow"
++$ns at 700 "new MonFlow"
++$ns at 820.0 "finish"
++
++$ns run
+diff -urN ns-2.27/tcl/ex/rsvp/rsvp_merge.tcl ns-2.27-rsvp/tcl/ex/rsvp/rsvp_merge.tcl
+--- ns-2.27/tcl/ex/rsvp/rsvp_merge.tcl	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/tcl/ex/rsvp/rsvp_merge.tcl	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,206 @@
++#
++# Copyright (c) 1998 The University of Bonn
++# All rights reserved.
++# 
++# Permission to use and copy this software in source and binary forms
++# is hereby granted, provided that the above copyright notice, this
++# paragraph and the following disclaimer are retained in any copies
++# of any part of this software and that the University of Bonn is
++# acknowledged in all documentation pertaining to any such copy
++# or derivative work. The name of the University of Bonn may not
++# be used to endorse or promote products derived from this software
++# without specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++# EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++# THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++# WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++# OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++# SOFTWARE.
++#
++
++# This simulation scenario demonstrates merging of reservations
++# for a multicase session. For a detailed description, see
++# 'http://titan.cs.uni-bonn.de/~greis/rsvpns/rsvpns.ps'
++
++$defaultRNG seed 1
++
++set ns [new Simulator -multicast on]
++
++$ns color 0 red
++$ns color 1 blue
++$ns color 2 green
++$ns color 46 purple
++
++set f0 [open out0.tr w]
++set f1 [open out1.tr w]
++set f2 [open out2.tr w]
++
++#$ns set-address-format expanded
++
++#Simulator set EnableMcast_ 1
++#Simulator set NumberInterfaces_ 1
++
++#Node expandaddr
++
++set n0 [$ns node]
++set n1 [$ns node]
++set n2 [$ns node]
++set n3 [$ns node]
++set n4 [$ns node]
++
++set nf [open out.nam w]
++# Turn nam trace generation off for now
++$ns namtrace-all $nf
++
++
++$ns duplex-rsvp-link $n0 $n1 1Mb 1s 0.5 50 5000 Param Null
++$ns duplex-rsvp-link $n1 $n2 1Mb 1s 0.5 50 5000 Param Null
++$ns duplex-rsvp-link $n1 $n3 1Mb 1s 0.5 50 5000 Param Null
++$ns duplex-rsvp-link $n1 $n4 1Mb 1s 0.5 50 5000 Param Null
++
++set link [$ns link $n0 $n1]
++set queue [$link queue]
++
++DM set PruneTimeout 60.0
++set mproto DM
++set mrthandle [$ns mrtproto $mproto {}]
++
++# Enable all upcalls on all nodes
++Agent/RSVP set noisy_ 255
++
++set rsvp4 [$n4 add-rsvp-agent]
++set rsvp3 [$n3 add-rsvp-agent]
++set rsvp2 [$n2 add-rsvp-agent]
++set rsvp1 [$n1 add-rsvp-agent]
++set rsvp0 [$n0 add-rsvp-agent]
++
++set group0 [Node allocaddr]
++set group1 [Node allocaddr]
++set group2 [Node allocaddr]
++
++# Create three traffic sources
++set udp0 [new Agent/UDP]
++$ns attach-agent $n0 $udp0
++$udp0 set packetSize_ 500
++$udp0 set fid_ 1
++$udp0 set dst_addr_ $group0
++set cbr0 [new Application/Traffic/CBR]
++$cbr0 set rate_ 500k
++$cbr0 set packetSize_ 500
++#$cbr0 set random_ 1
++$cbr0 attach-agent $udp0
++
++set udp1 [new Agent/UDP]
++$ns attach-agent $n0 $udp1
++$udp1 set packetSize_ 500
++$udp1 set fid_ 2
++$udp1 set dst_addr_ $group1
++set cbr1 [new Application/Traffic/CBR]
++$cbr1 set rate_ 500k
++$cbr1 set packetSize_ 500
++#$cbr1 set random_ 1
++$cbr1 attach-agent $udp1
++
++set udp2 [new Agent/UDP]
++$ns attach-agent $n0 $udp2
++$udp2 set packetSize_ 500
++$udp2 set fid_ 3
++$udp2 set dst_addr_ $group2
++set cbr2 [new Application/Traffic/CBR]
++$cbr2 set rate_ 500k
++$cbr2 set packetSize_ 500
++#$cbr2 set random_ 1
++$cbr2 attach-agent $udp2
++
++# Create 9 traffic sinks (three for each flow on each node)
++# (This could be done in a more efficient way)
++set null2a [new Agent/LossMonitor]
++$ns attach-agent $n2 $null2a
++set null2b [new Agent/LossMonitor]
++$ns attach-agent $n2 $null2b
++set null2c [new Agent/LossMonitor]
++$ns attach-agent $n2 $null2c
++
++set null3a [new Agent/LossMonitor]
++$ns attach-agent $n3 $null3a
++set null3b [new Agent/LossMonitor]
++$ns attach-agent $n3 $null3b
++set null3c [new Agent/LossMonitor]
++$ns attach-agent $n3 $null3c
++
++set null4a [new Agent/LossMonitor]
++$ns attach-agent $n4 $null4a
++set null4b [new Agent/LossMonitor]
++$ns attach-agent $n4 $null4b
++set null4c [new Agent/LossMonitor]
++$ns attach-agent $n4 $null4c
++
++
++$rsvp0 session $group0 1
++
++set counter 0
++$ns at 0.0 "record"
++
++$ns at 0.5 "$n2 join-group $null2a $group0"
++$ns at 0.5 "$n3 join-group $null3a $group0"
++$ns at 0.5 "$n4 join-group $null4a $group0"
++$ns at 0.5 "$n2 join-group $null2b $group1"
++$ns at 0.5 "$n3 join-group $null3b $group1"
++$ns at 0.5 "$n4 join-group $null4b $group1"
++$ns at 0.5 "$n2 join-group $null2c $group2"
++$ns at 0.5 "$n3 join-group $null3c $group2"
++$ns at 0.5 "$n4 join-group $null4c $group2"
++
++$ns at 1.0 "$rsvp0 sender 0 +500000 5000 32"
++# First the receivers reserve resources with increasing bandwidth,
++# then the reservations are released one by one.
++$ns at 300.0 "$rsvp2 reserve 0 ff +100000 100000 $n0"
++$ns at 600.0 "$rsvp3 reserve 0 ff +300000 100000 $n0"
++$ns at 900.0 "$rsvp4 reserve 0 ff +500000 100000 $n0"
++$ns at 1200.0 "$rsvp4 release 0"
++$ns at 1500.0 "$rsvp3 release 0"
++$ns at 1800.0 "$rsvp2 release 0"
++
++$ns at 10.0 "$cbr0 start"
++$ns at 2000.0 "$cbr0 stop"
++$ns at 10.0 "$cbr1 start"
++$ns at 2000.0 "$cbr1 stop"
++$ns at 10.0 "$cbr2 start"
++$ns at 2000.0 "$cbr2 stop"
++
++#$ns at 2100.0 "finish"
++$ns at 100.0 "finish"
++
++proc record {} {
++	global null2a null2b null2c ns f0 f1 f2 counter
++	set time 10.0
++	set bw0 [$null2a set bytes_]
++	set bw1 [$null2b set bytes_]
++        set bw2 [$null2c set bytes_]
++	set now [$ns now]
++	puts $f0 "$now [expr $bw0/$time*8]"
++	puts $f1 "$now [expr $bw1/$time*8]"
++	puts $f2 "$now [expr $bw2/$time*8]"
++	$null2a set bytes_ 0
++	$null2b set bytes_ 0
++	$null2c set bytes_ 0
++	$ns at [expr $now+$time] "record"
++	if { $counter == 10 } {
++		puts "Time: $now"
++		set counter 0
++	}
++	incr counter
++}
++
++
++proc finish {} {
++        global ns nf
++        $ns flush-trace
++        close $nf
++	puts "Done."
++        exit 0
++}
++
++$ns run
+diff -urN ns-2.27/tcl/lib/ns-lib.tcl ns-2.27-rsvp/tcl/lib/ns-lib.tcl
+--- ns-2.27/tcl/lib/ns-lib.tcl	Tue Jan 13 02:54:42 2004
++++ ns-2.27-rsvp/tcl/lib/ns-lib.tcl	Wed Sep 29 09:38:52 2004
+@@ -154,6 +154,7 @@
+ source ns-sat.tcl
+ #source ns-nix.tcl
+ source ns-diffusion.tcl
++source ns-rsvp.tcl
+ source ../rtp/session-rtp.tcl
+ source ../interface/ns-iface.tcl
+ source ../lan/ns-mac.tcl
+diff -urN ns-2.27/tcl/lib/ns-packet.tcl ns-2.27-rsvp/tcl/lib/ns-packet.tcl
+--- ns-2.27/tcl/lib/ns-packet.tcl	Tue Jan 13 02:54:42 2004
++++ ns-2.27-rsvp/tcl/lib/ns-packet.tcl	Wed Sep 29 09:38:52 2004
+@@ -156,6 +156,7 @@
+ 	Pushback
+ 	SCTP
+ 	Smac
++	RSVP
+ 	NV
+ } {
+ 	add-packet-header $prot
+diff -urN ns-2.27/tcl/lib/ns-rsvp.tcl ns-2.27-rsvp/tcl/lib/ns-rsvp.tcl
+--- ns-2.27/tcl/lib/ns-rsvp.tcl	Thu Jan  1 02:00:00 1970
++++ ns-2.27-rsvp/tcl/lib/ns-rsvp.tcl	Wed Sep 29 09:38:52 2004
+@@ -0,0 +1,339 @@
++#
++# Copyright (c) 1998 The University of Bonn
++# All rights reserved.
++# 
++# Permission to use and copy this software in source and binary forms
++# is hereby granted, provided that the above copyright notice, this
++# paragraph and the following disclaimer are retained in any copies
++# of any part of this software and that the University of Bonn is
++# acknowledged in all documentation pertaining to any such copy
++# or derivative work. The name of the University of Bonn may not
++# be used to endorse or promote products derived from this software
++# without specific prior written permission.
++#
++# THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
++# EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE WARRANTIES OF 
++# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL 
++# THE UNIVERSITY OF BONN BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++# WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF 
++# OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE 
++# SOFTWARE.
++#
++
++WFQClass set limit_ 5000
++WFQClass set bw_ 0
++WFQClass set blocked_ false
++WFQClass set unblock_on_resume_ true
++WFQClass set debug_ false
++WFQClass set util_weight_ 0.8
++
++Queue/WFQ set wf2q_ 0
++Queue/WFQ set prio_ 0
++Queue/WFQ set best_effort_ 0
++Queue/WFQ set borrow_ 0
++Queue/WFQ set num_classes_ 0
++Queue/WFQ set num_flows_ 0
++Queue/WFQ set num_drops_ 0
++Queue/WFQ set size_drops_ 0
++
++Agent/RSVP set noisy_ 0
++Agent/RSVP set refresh_ 30
++Agent/RSVP set lifetime_factor_ 3
++Agent/RSVP set ip6_ 0
++Agent/RSVP set fid_ 46
++Agent/RSVP set num_flows_ 0
++Agent/RSVP set num_rsb_ 0
++Agent/RSVP set num_psb_ 0
++Agent/RSVP set nam_ 1
++
++RSVPLink set src_ -1
++RSVPLink set dst_ -1
++RSVPLink set besteffort_ 0
++RSVPLink set debug_ false
++
++RSVPChecker set src_ 0
++RSVPChecker set debug_ false
++
++# Clear the stats for a WFQ queue
++Queue/WFQ instproc clear-stats {} {
++	$self set num_drops_ 0
++	$self set size_drops_ 0
++}
++
++
++# Upcall procedure for path events
++Agent/RSVP instproc upcall-path { sid rate bucket sender } {
++	set ns [Simulator instance]
++	puts "[expr [$self set agent_addr_]] \
++		PATH EVENT at [format "%3.3f" [$ns now]] :\
++		SID: $sid RATE: [format "%.0f" $rate] BUCKET:\
++		 $bucket SENDER: $sender"
++}
++
++
++# Upcall procedure for path-tear events
++Agent/RSVP instproc upcall-path-tear { sid sender } {
++	set ns [Simulator instance]
++	puts "[expr [$self set agent_addr_] ] \
++		PATHTEAR EVENT at [format "%3.3f" [$ns now]] :\
++		SID: $sid SENDER: $sender"
++}
++
++
++# Upcall procedure for resv-tear events
++Agent/RSVP instproc upcall-resv-tear { sid sender } {
++	set ns [Simulator instance]
++	puts "[expr [$self set agent_addr_] ] \
++		RESVTEAR EVENT at [format "%3.3f" [$ns now]] :\
++		SID: $sid SENDER: $sender"
++}
++
++
++# Upcall procedure for resv events
++Agent/RSVP instproc upcall-resv { sid rate bucket sender } {
++        set ns [Simulator instance]
++        puts "[expr [$self set agent_addr_] ] \
++		RESV EVENT at [format "%3.3f" [$ns now]] :\
++                SID: $sid RATE: [format "%.0f" $rate]\
++		 BUCKET: $bucket SENDER: $sender"
++}
++
++
++# Upcall procedure for path-timeout events
++Agent/RSVP instproc upcall-path-timeout { sid sender } {
++	set ns [Simulator instance]
++	puts "[expr [$self set agent_addr_] ] \
++		PATHTIMEOUT EVENT at [format "%3.3f" [$ns now]] :\
++		SID: $sid SENDER: $sender"
++}
++
++
++# Upcall procedure for resv-timeout events
++Agent/RSVP instproc upcall-resv-timeout { sid sender } {
++	set ns [Simulator instance]
++	puts "[expr [$self set agent_addr_] ] \
++		RESVTIMEOUT EVENT at [format "%3.3f" [$ns now]] :\
++		SID: $sid SENDER: $sender"
++}
++
++
++# Upcall procedure for resv-confirm events
++Agent/RSVP instproc upcall-resv-confirm { sid sender node } {
++	set ns [Simulator instance]
++	puts "[expr [$self set agent_addr_] ] \
++		RESVCONF EVENT at [format "%3.3f" [$ns now]] :\
++		SID: $sid SENDER: $sender NODE: $node"
++}
++
++
++# Upcall procedure for resv-error events
++Agent/RSVP instproc upcall-resv-error { sid code value node } {
++	set ns [Simulator instance]
++	puts "[expr [$self set agent_addr_] ] \
++		RESVERROR EVENT at [format "%3.3f" [$ns now]] :\
++		SID: $sid CODE: $code VALUE: $value NODE: $node"
++}
++
++
++# Return the admission control module which is attached to the link
++# between n1 and n2.
++Agent/RSVP instproc get-adc { n1 n2 } {
++	set link [[Simulator instance] link $n1 $n2]
++	return [$link set adc_]
++}
++
++
++# Check if the node the agent is attached to is a leaf in the
++# source-tree for the multicast group 'dst' and the source 'src'.
++Agent/RSVP instproc is-leaf { src dst } {
++	set node [$self set node_]
++	set rep [$node getReps $src $dst]
++	if { $rep == "" } {
++		return 1
++	} 
++	if { [$rep slots] == "" } {
++		return 1
++	}		
++	return 0
++}
++
++
++# Create a class for the best-effort traffic
++RSVPLink instproc set-be { bw lim que } {
++	$self instvar wfq_be_
++	set wfq_be_ [new WFQClass]
++	$wfq_be_ set limit_ $lim
++	$wfq_be_ set bw_ $bw
++	$que add $wfq_be_
++	$que bind $wfq_be_ -1 0
++}
++
++
++# Return the best-effort traffic class
++RSVPLink instproc get-be {} {
++	$self instvar wfq_be_
++	return $wfq_be_
++}
++
++
++# Set the destination for an RSVPChecker object
++RSVPChecker instproc set-dst { node } {
++	$self instvar dst_
++	set dst_ $node 
++}
++
++
++# Set the source for an RSVPChecker object
++RSVPChecker instproc set-src { node } {
++	$self instvar src_
++	set src_ [$node id]
++}
++
++
++# Return the destination for an RSVPChecker object
++RSVPChecker instproc get-rsvp-agent {} {
++	$self instvar dst_
++	return [$dst_ get-rsvp-agent]
++}
++
++
++# Return the address of the destination agent for an RSVPChecker object
++RSVPChecker instproc get-rsvp-agent-addr {} {
++	$self instvar dst_
++	set agent [$dst_ get-rsvp-agent]
++	return [$agent set agent_addr_]
++}
++
++
++# Add an RSVP agent to a node
++Node instproc add-rsvp-agent {} {
++	$self instvar rsvp_
++	set rsvp_ [new Agent/RSVP]
++	[Simulator instance] attach-agent $self $rsvp_
++	return $rsvp_
++}
++
++
++# Return a node's RSVP agent (or nothing if there is none)
++Node instproc get-rsvp-agent {} {
++	$self instvar rsvp_
++	if [info exists rsvp_] {
++		return $rsvp_
++	} else {
++		return
++	}
++}
++
++
++# Add an RSVPChecker object to a link
++SimpleLink instproc add-rsvp-checker { check } {
++	$self instvar rsvpcheck_ link_ ttl_
++	set rsvpcheck_ $check
++}
++
++
++# Connect two RSVP agents
++Simulator instproc connect-rsvp-agents { n1 n2 } {
++	set a1 [[$self get-node-by-id $n1] get-rsvp-agent]
++	set a2 [[$self get-node-by-id $n2] get-rsvp-agent]
++	$self connect $a1 $a2
++}
++
++
++# Add a single reservation to a link's scheduler
++Simulator instproc add-reservation { n1 n2 rate size} {
++	set link_ [$self link $n1 $n2]
++	set queue_ [$link_ queue]
++	set wfq [new WFQClass]
++	$wfq set limit_ $size
++	$wfq set bw_ $rate
++	$queue_ add $wfq
++        set signalmod_ [$link_ set signalmod_]
++	set be_ [$signalmod_ get-be]
++	$be_ set bw_ [expr [$be_ set bw_] - $rate]
++	return $wfq
++}
++
++
++# Modify a reservation
++Simulator instproc modify-reservation { n1 n2 wfq rate size} {
++	set diff [expr $rate - [$wfq set bw_]]
++	$wfq set limit_ $size
++	$wfq set bw_ $rate
++        set link_ [$self link $n1 $n2]
++        set signalmod_ [$link_ set signalmod_]
++	set be_ [$signalmod_ get-be]
++	$be_ set bw_ [expr [$be_ set bw_] - $diff]
++}
++
++
++# Remove a reservation from a link's scheduler
++Simulator instproc delete-reservation { n1 n2 wfq } {
++	$self modify-reservation $n1 $n2 $wfq 0 0
++        set link_ [$self link $n1 $n2]
++        set queue_ [$link_ queue]
++        $queue_ remove $wfq
++	delete $wfq
++}
++
++
++# Bind a filter/fid combination to a reservation
++Simulator instproc add-filter-fid { n1 n2 wfq sender fid } {
++	set link_ [$self link $n1 $n2]
++	set queue_ [$link_ queue]
++	$queue_ bind $wfq $sender $fid
++}
++
++
++# Unbind a filter/fid combination from a reservation
++Simulator instproc delete-filter-fid { n1 n2 sender fid } {
++	set link_ [$self link $n1 $n2]
++	set queue_ [$link_ queue]
++	$queue_ unbind $sender $fid
++}
++
++
++# Set up an RSVP link with an RSVPChecker object, admission
++# control and a class for the best-effort traffic
++Simulator instproc setup-rsvp-link { n1 n2 bw res signal lim } {
++	set link_ [$self link $n1 $n2]
++	set ttl_ [$link_ set ttl_]
++	set rsvpcheck_ [new RSVPChecker]
++	$rsvpcheck_ set-dst $n2
++	$rsvpcheck_ target [$ttl_ target]
++	$ttl_ target $rsvpcheck_
++	$rsvpcheck_ set-dst $n2
++	$rsvpcheck_ set-src $n1
++	set adc_ [$link_ set adc_]
++	$adc_ set utilization_ $res
++	set queue_ [$link_ queue]
++	$queue_ set best_effort_ 1
++	$queue_ set borrow_ 1
++	$queue_ set src_ 1
++	set signalmod_ [$link_ set signalmod_]
++	$signalmod_ set-be $bw $lim $queue_
++	set sigwfq [new WFQClass]
++	if { $signal > 0 } {
++		$sigwfq set limit_ 1000
++		$sigwfq set bw_ $signal
++		$queue_ add $sigwfq
++		$queue_ bind $sigwfq -1 46
++		set be_ [$signalmod_ get-be]
++		$be_ set bw_ [expr [$be_ set bw_] - $signal]
++	}
++}
++
++
++# Create a duplex RSVP link
++# Arguments: Node1, Node2, Bandwidth, Delay, Reservable Portion of the
++# link, portion of the link reserved for RSVP messages, queue size for the 
++# best-effort class, admission control module, estimator module (for 
++# measurement based admission control)
++Simulator instproc duplex-rsvp-link { n1 n2 bw delay res signal lim adc est } {
++	$self duplex-intserv-link $n1 $n2 $bw $delay WFQ RSVPLink $adc $est CL
++	$self setup-rsvp-link $n1 $n2 $bw $res $signal $lim
++	$self setup-rsvp-link $n2 $n1 $bw $res $signal $lim
++}
++
++# To get rid of the warnings when using ADC/Param:
++ADC/Param set utilization_ 0
