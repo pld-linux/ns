@@ -1,0 +1,78 @@
+diff -urN ns-2.26.bak/indep-utils/cmu-scen-gen/setdest/Makefile.in ns-2.26/indep-utils/cmu-scen-gen/setdest/Makefile.in
+--- ns-2.26.bak/indep-utils/cmu-scen-gen/setdest/Makefile.in	2003-02-26 23:08:45.000000000 +0100
++++ ns-2.26/indep-utils/cmu-scen-gen/setdest/Makefile.in	2003-10-31 15:09:08.000000000 +0100
+@@ -46,8 +46,8 @@
+ all: setdest calcdest
+ 
+ install: setdest calcdest
+-	$(INSTALL) -m 555 -o bin -g bin setdest $(DESTDIR)$(BINDEST)
+-	$(INSTALL) -m 555 -o bin -g bin calcdest $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 555 setdest $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 555 calcdest $(DESTDIR)$(BINDEST)
+ 
+ setdest: rng.o setdest.o
+ 	$(CCX) -o setdest $@.o rng.o $(DEFINE) $(LDFLAGS) $(CFLAGS) \
+diff -urN ns-2.26.bak/indep-utils/webtrace-conv/dec/Makefile.in ns-2.26/indep-utils/webtrace-conv/dec/Makefile.in
+--- ns-2.26.bak/indep-utils/webtrace-conv/dec/Makefile.in	2003-02-26 23:08:50.000000000 +0100
++++ ns-2.26/indep-utils/webtrace-conv/dec/Makefile.in	2003-10-31 15:08:50.000000000 +0100
+@@ -50,7 +50,7 @@
+ all: dec-tr-stat
+ 
+ install: dec-tr-stat
+-	$(INSTALL) -m 555 -o bin -g bin dec-tr-stat $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 555 dec-tr-stat $(DESTDIR)$(BINDEST)
+ 
+ dec-tr-stat: $(OBJ)
+ 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $(OBJ) $(LIBS)
+diff -urN ns-2.26.bak/indep-utils/webtrace-conv/epa/Makefile.in ns-2.26/indep-utils/webtrace-conv/epa/Makefile.in
+--- ns-2.26.bak/indep-utils/webtrace-conv/epa/Makefile.in	2003-02-26 23:08:51.000000000 +0100
++++ ns-2.26/indep-utils/webtrace-conv/epa/Makefile.in	2003-10-31 15:08:42.000000000 +0100
+@@ -48,7 +48,7 @@
+ 	$(CC) -o $@ $(LDFLAGS) $(CFLAGS) $(INCLUDE) $(OBJ) $(LIBS)
+ 
+ install: epa-tr-stat
+-	$(INSTALL) -m 555 -o bin -g bin epa-tr-stat $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 555 epa-tr-stat $(DESTDIR)$(BINDEST)
+ 
+ .SUFFIXES: .cc
+ 
+diff -urN ns-2.26.bak/indep-utils/webtrace-conv/nlanr/Makefile.in ns-2.26/indep-utils/webtrace-conv/nlanr/Makefile.in
+--- ns-2.26.bak/indep-utils/webtrace-conv/nlanr/Makefile.in	2003-02-26 23:08:52.000000000 +0100
++++ ns-2.26/indep-utils/webtrace-conv/nlanr/Makefile.in	2003-10-31 15:08:23.000000000 +0100
+@@ -49,7 +49,7 @@
+ 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $(OBJ) $(LIBS)
+ 
+ install: nlanr-tr-stat
+-	$(INSTALL) -m 555 -o bin -g bin nlanr-tr-stat $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 555 nlanr-tr-stat $(DESTDIR)$(BINDEST)
+ 
+ .SUFFIXES: .cc 
+ 
+diff -urN ns-2.26.bak/indep-utils/webtrace-conv/ucb/Makefile.in ns-2.26/indep-utils/webtrace-conv/ucb/Makefile.in
+--- ns-2.26.bak/indep-utils/webtrace-conv/ucb/Makefile.in	2003-02-26 23:08:52.000000000 +0100
++++ ns-2.26/indep-utils/webtrace-conv/ucb/Makefile.in	2003-10-31 15:08:35.000000000 +0100
+@@ -42,7 +42,7 @@
+ 	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $(OBJ) $(LIBS)
+ 
+ install: ucb-tr-stat
+-	$(INSTALL) -m 555 -o bin -g bin ucb-tr-stat $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 555 ucb-tr-stat $(DESTDIR)$(BINDEST)
+ 
+ .SUFFIXES: .cc
+ 
+diff -urN ns-2.26.bak/Makefile.in ns-2.26/Makefile.in
+--- ns-2.26.bak/Makefile.in	2003-02-28 01:51:25.000000000 +0100
++++ ns-2.26/Makefile.in	2003-10-31 15:08:16.000000000 +0100
+@@ -452,10 +452,10 @@
+ install: force install-ns install-man install-recursive
+ 
+ install-ns: force
+-	$(INSTALL) -m 555 -o bin -g bin ns $(DESTDIR)$(BINDEST)
++	$(INSTALL) -m 555 ns $(DESTDIR)$(BINDEST)
+ 
+ install-man: force
+-	$(INSTALL) -m 444 -o bin -g bin ns.1 $(DESTDIR)$(MANDEST)/man1
++	$(INSTALL) -m 444 ns.1 $(DESTDIR)$(MANDEST)/man1
+ 
+ install-recursive: force
+ 	for i in $(SUBDIRS); do ( cd $$i; $(MAKE) install; ) done
