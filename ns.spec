@@ -5,7 +5,7 @@ Summary:	NS-2 network simulator
 Summary(pl):	Symulator sieci NS-2
 Name:		ns
 Version:	2.27
-Release:	1
+Release:	2
 License:	various
 Group:		Applications/Networking
 Source0:	http://www.isi.edu/nsnam/dist/%{name}-src-%{version}.tar.gz
