@@ -4,21 +4,21 @@
 Summary:	MS-2 network simulator
 Summary(pl):	Symulator sieci NS-2
 Name:		ns
-Version:	2.26
+Version:	2.27
 Release:	1
 License:	various
 Group:		Applications/Networking
 Source0:	http://www.isi.edu/nsnam/dist/%{name}-src-%{version}.tar.gz
-# Source0-md5:	c75aa2047fa3e13ed2a43881c50e4c65
+# Source0-md5:	db3a16e450f66a5e4dd881349ccc5dd7
 Source1:	http://www.isi.edu/nsnam/ns/doc/ns_doc.pdf
-# Source1-md5:	7a9a610dd345dbf71f565d75c821e787
+# Source1-md5:	66e82f100292ebe0bda8bcb98fa26bba
 URL:		http://www.isi.edu/nsnam/
 Patch0:		%{name}-install.patch
 BuildRequires:	autoconf
 BuildRequires:	otcl-devel
 BuildRequires:	tclcl-static
-BuildRequires:	tcl-devel = 8.4.4
-BuildRequires:	tk-devel = 8.4.4
+BuildRequires:	tcl-devel
+BuildRequires:	tk-devel
 BuildRoot:	%{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 
 %description
@@ -92,8 +92,8 @@ Pliki tcl dla NS.
 %build
 %{__autoconf}
 %configure \
-	--with-tcl-ver=8.4.4 \
-	--with-tk-ver=8.4.4
+	--with-tcl-ver=8.4 \
+	--with-tk-ver=8.4
 %{__make} \
 	CCOPT="%{rpmcflags}" \
 	CXXFLAGS="%{rpmcflags}"
