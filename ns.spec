@@ -1,7 +1,7 @@
 #
 # TODO: process {bin,doc,indep-utils/model-gen} directories
 #
-Summary:	MS-2 network simulator
+Summary:	NS-2 network simulator
 Summary(pl):	Symulator sieci NS-2
 Name:		ns
 Version:	2.27
