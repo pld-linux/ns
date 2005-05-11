@@ -19,6 +19,7 @@ Patch2:		%{name}-%{version}-rsvp3.patch
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	otcl-devel
+BuildRequires:	perl-base
 BuildRequires:	tclcl-static
 BuildRequires:	tcl-devel >= 8.4
 BuildRequires:	tk-devel >= 8.4
@@ -103,8 +104,9 @@ cp -f /usr/share/automake/config.sub .
 %{__make} \
 	CCOPT="%{rpmcflags}" \
 	CXXFLAGS="%{rpmcflags}"
-perl -pe 's|/usr/local/bin/|/usr/bin/|' -i tcl/ex/tcp-fs/{process.awk,run.tcl}
-perl -pe 's|/usr/sww/bin/|/usr/bin/|' -i tcl/ex/tcp-fs/run-fs-asym.tcl
+
+%{__perl} -pe 's|/usr/local/bin/|/usr/bin/|' -i tcl/ex/tcp-fs/{process.awk,run.tcl}
+%{__perl} -pe 's|/usr/sww/bin/|/usr/bin/|' -i tcl/ex/tcp-fs/run-fs-asym.tcl
 
 %install
 rm -rf $RPM_BUILD_ROOT
