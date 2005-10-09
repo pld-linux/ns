@@ -1,3 +1,12 @@
+diff -urbB ns-2.27.org/tcl/ex/tcp-fs/process.awk ns-2.27/tcl/ex/tcp-fs/process.awk
+--- ns-2.27.org/tcl/ex/tcp-fs/process.awk	2004-01-13 01:54:32.000000000 +0100
++++ ns-2.27/tcl/ex/tcp-fs/process.awk	2005-10-09 13:49:51.758582250 +0200
+@@ -1,4 +1,4 @@
+-#!/usr/local/bin/gawk -f
++#!/bin/gawk -f
+ BEGIN {
+ 	erriter = -1;
+ }
 diff -urbB ns-2.27.org/tcl/ex/wireless-scripts/xg2gp.awk ns-2.27/tcl/ex/wireless-scripts/xg2gp.awk
 --- ns-2.27.org/tcl/ex/wireless-scripts/xg2gp.awk	2004-01-13 01:54:26.000000000 +0100
 +++ ns-2.27/tcl/ex/wireless-scripts/xg2gp.awk	2005-10-09 13:01:32.581395000 +0200
