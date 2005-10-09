@@ -5,7 +5,7 @@ Summary:	NS-2 network simulator
 Summary(pl):	Symulator sieci NS-2
 Name:		ns
 Version:	2.27
-Release:	5
+Release:	6
 License:	various
 Group:		Applications/Networking
 Source0:	http://www.isi.edu/nsnam/dist/%{name}-src-%{version}.tar.gz
@@ -16,6 +16,7 @@ URL:		http://www.isi.edu/nsnam/
 Patch0:		%{name}-install.patch
 Patch1:		tcl-lib.patch
 Patch2:		%{name}-%{version}-rsvp3.patch
+Patch3:		%{name}-awk.patch
 BuildRequires:	autoconf
 BuildRequires:	automake
 BuildRequires:	otcl-devel
@@ -94,6 +95,7 @@ Pliki Tcl dla NS.
 %patch0 -p1
 %patch1 -p1
 %patch2 -p1
+%patch3 -p1
 
 %build
 cp -f /usr/share/automake/config.sub .
