@@ -60,32 +60,6 @@ diff -ur otcl-1.8.orig/conf/configure.in.tcl otcl-1.8/conf/configure.in.tcl
  		"
  
  dnl Decide which set of .tcl library files to use
-diff -ur otcl-1.8.orig/conf/configure.in.Tcl otcl-1.8/conf/configure.in.Tcl
---- otcl-1.8.orig/conf/configure.in.Tcl	2003-02-10 23:44:13.000000000 +0100
-+++ otcl-1.8/conf/configure.in.Tcl	2004-08-18 21:34:28.140141448 +0200
-@@ -28,7 +28,8 @@
- 
- 	AC_MSG_CHECKING(for libTcl)
-         places="$d \
--                $d/lib"  
-+                $d/lib \
-+                $d/lib64"  
- 	V_LIB_BTCL=FAIL
- 	for dir in $places; do
- 		if test -r $dir/libTcl.so -o -r $dir/libTcl.a ; then
-@@ -89,10 +90,11 @@
-                 ../$LIBTCL_OLD_VERSION \
-                 ../$LIBTCL_VERSION \
-                 $prefix/lib \
-+                $prefix/lib64 \
-                 $x_libraries \
-                 /usr/contrib/lib \
-                 /usr/local/lib \
--                /usr/lib \
-+                /usr/lib64 \
-                 /usr/src/local/Tcl \
-                 /usr/src/local/$LIBTCL_OLD_VERSION \
-                 /usr/src/local/$LIBTCL_VERSION \
 diff -ur otcl-1.8.orig/conf/configure.in.TclCL otcl-1.8/conf/configure.in.TclCL
 --- otcl-1.8.orig/conf/configure.in.TclCL	2003-02-10 23:44:13.000000000 +0100
 +++ otcl-1.8/conf/configure.in.TclCL	2004-08-18 21:34:51.590576440 +0200
