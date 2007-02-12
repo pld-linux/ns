@@ -2,7 +2,7 @@
 # TODO: process {bin,doc,indep-utils/model-gen} directories
 #
 Summary:	NS-2 network simulator
-Summary(pl):	Symulator sieci NS-2
+Summary(pl.UTF-8):   Symulator sieci NS-2
 Name:		ns
 Version:	2.27
 Release:	7
@@ -32,27 +32,27 @@ provides substantial support for simulation of TCP, routing, and
 multicast protocols over wired and wireless (local and satellite)
 networks.
 
-%description -l pl
-Ns jest symulatorem dyskretnych zdarzeñ kierowanym w stronê badañ
-sieci. Dobrze wspiera symulacjê protoko³ów TCP, routingu oraz
+%description -l pl.UTF-8
+Ns jest symulatorem dyskretnych zdarzeÅ„ kierowanym w stronÄ™ badaÅ„
+sieci. Dobrze wspiera symulacjÄ™ protokoÅ‚Ã³w TCP, routingu oraz
 multicastowych w przewodowych i bezprzewodowych (lokalnych i
 satelitarnych) sieciach.
 
 %package cmu-scen
 Summary:	CBR connections generator for NS
-Summary(pl):	Generator po³±czeñ CBR dla NS
+Summary(pl.UTF-8):   Generator poÅ‚Ä…czeÅ„ CBR dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
 %description cmu-scen
 CBR connections generator for NS.
 
-%description cmu-scen -l pl
-Generator po³±czeñ CBR dla NS.
+%description cmu-scen -l pl.UTF-8
+Generator poÅ‚Ä…czeÅ„ CBR dla NS.
 
 %package empweb
 Summary:	Empirical FTP/Web traffic model for NS
-Summary(pl):	Empiryczny model ruchowy FTP/Web dla NS
+Summary(pl.UTF-8):   Empiryczny model ruchowy FTP/Web dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
@@ -61,33 +61,33 @@ Empirical FTP/Web traffic model that simulates FTP/Web traffic based
 on a set of CDF (Cumulative Distribution Function) data derived from
 live tcpdump trace.
 
-%description empweb -l pl
-Empiryczny model ruchowy FTP/Web, który symuluje ruch FTP/Web na
-podstawie danych CDF (dystrybuanty) wyci±gniêtych z prawdziwego
-¶ledzenia tcpdump.
+%description empweb -l pl.UTF-8
+Empiryczny model ruchowy FTP/Web, ktÃ³ry symuluje ruch FTP/Web na
+podstawie danych CDF (dystrybuanty) wyciÄ…gniÄ™tych z prawdziwego
+Å›ledzenia tcpdump.
 
 %package emulate
 Summary:	TCP emulation for NS
-Summary(pl):	Emulacja TCP dla NS
+Summary(pl.UTF-8):   Emulacja TCP dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
 %description emulate
 TCP emulation for NS.
 
-%description emulate -l pl
+%description emulate -l pl.UTF-8
 Emulacja TCP dla NS.
 
 %package tcl
 Summary:	Tcl files for NS
-Summary(pl):	Pliki Tcl dla NS
+Summary(pl.UTF-8):   Pliki Tcl dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
 %description tcl
 Tcl files for NS.
 
-%description tcl -l pl
+%description tcl -l pl.UTF-8
 Pliki Tcl dla NS.
 
 %prep
