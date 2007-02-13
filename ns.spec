@@ -2,7 +2,7 @@
 # TODO: process {bin,doc,indep-utils/model-gen} directories
 #
 Summary:	NS-2 network simulator
-Summary(pl.UTF-8):   Symulator sieci NS-2
+Summary(pl.UTF-8):	Symulator sieci NS-2
 Name:		ns
 Version:	2.27
 Release:	7
@@ -40,7 +40,7 @@ satelitarnych) sieciach.
 
 %package cmu-scen
 Summary:	CBR connections generator for NS
-Summary(pl.UTF-8):   Generator połączeń CBR dla NS
+Summary(pl.UTF-8):	Generator połączeń CBR dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
@@ -52,7 +52,7 @@ Generator połączeń CBR dla NS.
 
 %package empweb
 Summary:	Empirical FTP/Web traffic model for NS
-Summary(pl.UTF-8):   Empiryczny model ruchowy FTP/Web dla NS
+Summary(pl.UTF-8):	Empiryczny model ruchowy FTP/Web dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
@@ -68,7 +68,7 @@ podstawie danych CDF (dystrybuanty) wyciągniętych z prawdziwego
 
 %package emulate
 Summary:	TCP emulation for NS
-Summary(pl.UTF-8):   Emulacja TCP dla NS
+Summary(pl.UTF-8):	Emulacja TCP dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
@@ -80,7 +80,7 @@ Emulacja TCP dla NS.
 
 %package tcl
 Summary:	Tcl files for NS
-Summary(pl.UTF-8):   Pliki Tcl dla NS
+Summary(pl.UTF-8):	Pliki Tcl dla NS
 Group:		Applications/Networking
 Requires:	%{name} = %{version}-%{release}
 
